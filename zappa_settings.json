@@ -1,0 +1,10 @@
+{
+    "dev": {
+        "django_settings": "admin_api.settings",
+        "profile_name": "default",
+        "project_name": "smartnyumba",
+        "aws_region": "us-west-1",
+        "runtime": "python3.10",
+        "s3_bucket": "zappa-9zopyirml"
+    }
+}
