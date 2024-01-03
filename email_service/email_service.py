@@ -163,7 +163,7 @@ def send_otp_message(otp, email):
     try:
         title = 'Registration OTP'
         email_subject = title
-        EBIASHARA_EMAIL = settings.EMAIL_HOST_USER
+        SYSTEM_EMAIL = settings.EMAIL_HOST_USER
         to = email
         message = 'Account verification otp is: '
         
@@ -171,16 +171,12 @@ def send_otp_message(otp, email):
         email = EmailMultiAlternatives(
             email_subject,
             html_content,
-            EBIASHARA_EMAIL,
+            SYSTEM_EMAIL,
             [to]
         )
         email.attach_alternative(html_content, "text/html")
-        if email.send():
-            
-            print("email sending process done...")
-            
-            return True
-        return False
+        email.send()
+        return True
     except Exception as e:
        print('ERROR:', str(e))
        return False

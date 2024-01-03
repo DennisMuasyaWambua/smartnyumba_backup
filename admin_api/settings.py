@@ -147,7 +147,7 @@ DATABASES = {
     'PORT': config('DB_PORT'),
     'USER': config('DB_USER'),
     'PASSWORD': config('DB_PASSWORD'),
-    'OPTIONS': {'ssl': {'ca': config('MYSQL_ATTR_SSL_CA')}, 'charset': 'utf8mb4'}
+    # 'OPTIONS': {'ssl': {'ca': config('MYSQL_ATTR_SSL_CA')}, 'charset': 'utf8mb4'}
   }
 }
 
@@ -200,15 +200,15 @@ USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # SMTP CONFIGURATIONS
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = config('EMAIL_HOST')
-EMAIL_HOST_USER = config('EMAIL_HOST_USER')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')
-SERVER_EMAIL = config('SERVER_EMAIL')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=False, cast=bool)
-EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=True, cast=bool)
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = config("EMAIL_HOST")
+EMAIL_HOST_USER = config("EMAIL_HOST_USER")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL")
+SERVER_EMAIL = config("SERVER_EMAIL")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=True, cast=bool)
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 
 SAFARICOM_AUTH_ENDPOINT=config('SAFARICOM_AUTH_ENDPOINT')
 SAFARICOM_AUTH_KEY=config('SAFARICOM_AUTH_KEY')

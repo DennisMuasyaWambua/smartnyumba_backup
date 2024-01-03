@@ -144,7 +144,7 @@ class PayServiceAPIView(APIView):
                 message_bytes = message.encode('ascii')
                 base64_bytes = base64.b64encode(message_bytes)
                 password = base64_bytes.decode('ascii')
-                CallBackURL = 'https://webhook.site/#!/c5f0cafc-c485-47ac-b089-43c9faa80fe1/aeab8b7c-0a16-4ea8-bf9e-a17c376927c1/1'
+                CallBackURL = 'https://webhook.site/2ef99e8c-6df5-43e5-a43e-e19264215797'
 
                 # CallBackURL = "https://y34b2e7j9d.execute-api.us-west-1.amazonaws.com/dev/apps/admin/api/v1/tenant-services/mpesa-callback/"
 
