@@ -157,6 +157,31 @@ def send_creation_email(email, password):
     except Exception as e:
        print('ERROR:', str(e))
        return False
+    
+def send_admin_creation_email(email, password):
+    
+    try:
+        title = 'Smartnyumba Admin profile creation'
+        email_subject = title
+        EBIASHARA_EMAIL = settings.EMAIL_HOST_USER
+        to = email
+        message = f'Dear Admin your registration to Smart nyumba is successful. Use to login use credentials: username {email}, password {password}'
+        
+        html_content = render_to_string("index.html", {'title': title, 'message': message})
+        email = EmailMultiAlternatives(
+            email_subject,
+            html_content,
+            EBIASHARA_EMAIL,
+            [to]
+        )
+        email.attach_alternative(html_content, "text/html")
+        if email.send():
+            
+            return True
+        return False
+    except Exception as e:
+       print('ERROR:', str(e))
+       return False
    
 def send_otp_message(otp, email):
     
@@ -210,7 +235,7 @@ def send_forgot_password_otp(otp, email):
 def approve_accounts_profile(otp, email, accounts_email):
     
     try:
-        title = 'Accounts Profile Approval'
+        title = 'Smartnyumba Account Profile Approval'
         email_subject = title
         EBIASHARA_EMAIL = settings.EMAIL_HOST_USER
         to = email

@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'block_landlord.apps.BlockLandlordConfig',
     'staff_accounts.apps.StaffAccountsConfig',
     'caretaker.apps.CaretakerConfig',
+    'admin_api.apps.AdminApiConfig',
     'properties.apps.PropertiesConfig',
     'rest_framework',
     'storages',
@@ -104,7 +105,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'admin_api.urls'
+ROOT_URLCONF = 'smartnyumba_system.urls'
 
 TEMPLATES = [
     {
@@ -122,7 +123,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'admin_api.wsgi.application'
+WSGI_APPLICATION = 'smartnyumba_system.wsgi.application'
 
 
 # Database
@@ -228,5 +229,5 @@ AWS_STORAGE_BUCKET_NAME = 'myzappa'
 AWS_S3_REGION_NAME = 'eu-west-1'
 AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
-STATICFILES_STORAGE = 'admin_api.storages.StaticStorage'
+STATICFILES_STORAGE = 'smartnyumba_system.storages.StaticStorage'
 STATIC_URL = 'https://' + AWS_S3_CUSTOM_DOMAIN + '/static/'
