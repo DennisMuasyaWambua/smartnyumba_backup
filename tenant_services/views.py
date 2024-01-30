@@ -297,6 +297,7 @@ class MpesaCallBackAPIView(APIView):
                 }, status=status.HTTP_404_NOT_FOUND)
             
             Service = Service.first()
+            Service.annual_service_charge -= Service.amount
             Service.status = 1
             Service.save()
 

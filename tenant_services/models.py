@@ -12,6 +12,7 @@ class services(models.Model):
     service_name = models.CharField(max_length=30, null=False)
     amount = models.DecimalField(max_digits=7, decimal_places=2, null=False)
     payment_mode = models.CharField(default='mpesa', max_length=15, choices=PAYMENTS)
+    annual_service_charge = models.DecimalField(decimal_places=2, max_digits=7)
     status = models.IntegerField(default=0)
     date_paid = models.DateField(auto_now_add=True)
     MerchantRequestID = models.CharField(max_length=50, null=True)
