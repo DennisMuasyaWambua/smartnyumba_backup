@@ -19,4 +19,5 @@ urlpatterns = [
 
     #-----PROFILE--------#
     path('user-profile/', views.UserProfileAPIView.as_view(), name='new-password-api'),
+    path("all-properties/", views.AllPropertiesAPIView.as_view(), name='all-properties-api') 
 ]

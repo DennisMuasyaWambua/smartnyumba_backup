@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-from properties.models import PropertyBlock
+from properties.models import Property, PropertyBlock
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -91,3 +91,8 @@ class TenantProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
         fields = '__all__'
+
+class AllProperiesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Property
+        fields = ['location', 'block_number']

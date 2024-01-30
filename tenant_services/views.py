@@ -172,8 +172,7 @@ class PayServiceAPIView(APIView):
                         user=user,
                         service_name=service_name,
                         amount=service_charge,
-                        payment_mode=pay_via
-                    )
+                        payment_mode=pay_via                    )
                     Service.save()
                     json_response = json.loads(response.text)
                     Service.MerchantRequestID = json_response['MerchantRequestID']

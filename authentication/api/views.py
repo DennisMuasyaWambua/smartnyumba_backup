@@ -2,6 +2,8 @@ import random
 import re
 from rest_framework. views import APIView as APIVIEW
 from rest_framework import status
+from django.db import IntegrityError
+
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken, OutstandingToken
 from rest_framework.permissions import IsAuthenticated
@@ -15,7 +17,7 @@ from properties.models import Property, PropertyBlock
 
 User = get_user_model()
 
-from authentication.api.serializers import AdminLogOutSerializer, ForgotPasswordSerializer, LoginSerializer, NewPasswordSerializer, ResendOtpSerializer, TenantProfileSerializer, UserLogOutSerializer, UserRegisterSerializer, UserRegisterVerificationSerializer, VerifyChangePasswordSerializer
+from authentication.api.serializers import AdminLogOutSerializer, AllProperiesSerializer, ForgotPasswordSerializer, LoginSerializer, NewPasswordSerializer, ResendOtpSerializer, TenantProfileSerializer, UserLogOutSerializer, UserRegisterSerializer, UserRegisterVerificationSerializer, VerifyChangePasswordSerializer
 
 
 class AdminLoginAPIView(APIVIEW):
@@ -59,48 +61,49 @@ class AdminLoginAPIView(APIVIEW):
                     'status': False,
                     'message': 'admin with this email does not exist'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            allowed_roles = ['admin']
-            user = user.first()
-            if not user.role.short_name in allowed_roles:
-                return Response({
-                    'status': False,
-                    'message': f"You cannot access this portal with user role!. Please contact customer care"
-                })
-            if user.status == 0:
-                return Response({
-                    'status': False,
-                    'message': 'Account not approved'
-                })
-            if user.status == 2:
-                return Response({
-                    'status': False,
-                    'message': 'Your account was rejected. Kindly contact Admin.'
-                })
-            if user.status == 3:
-                return Response({
-                    'status': False,
-                    'message': 'Your account was suspended. Kindly contact Admin.'
-                })
-            
-            user = authenticate(username=email, password=password)
+            with transaction.atomic():
+                allowed_roles = ['admin']
+                user = user.first()
+                if not user.role.short_name in allowed_roles:
+                    return Response({
+                        'status': False,
+                        'message': f"You cannot access this portal with user role!. Please contact customer care"
+                    })
+                if user.status == 0:
+                    return Response({
+                        'status': False,
+                        'message': 'Account not approved'
+                    })
+                if user.status == 2:
+                    return Response({
+                        'status': False,
+                        'message': 'Your account was rejected. Kindly contact Admin.'
+                    })
+                if user.status == 3:
+                    return Response({
+                        'status': False,
+                        'message': 'Your account was suspended. Kindly contact Admin.'
+                    })
+                
+                user = authenticate(username=email, password=password)
 
-            if user is None:
+                if user is None:
+                    return Response({
+                        'status': False,
+                        'message': 'Please provide correct username or password',
+                    })
+                
+                refresh = RefreshToken.for_user(user)
+                transaction.commit()
+                
                 return Response({
-                    'status': False,
-                    'message': 'Please provide correct username or password',
-                })
-            
-            refresh = RefreshToken.for_user(user)
-            
-            return Response({
-                    "status": True,
-                    "message": "Login Successful",
-                    'access_token': str(refresh.access_token),
-                    'role':user.role.short_name,
-                    'expires_in': '3600',
-                    'token_type': 'Bearer'
-                }, status=status.HTTP_200_OK)
+                        "status": True,
+                        "message": "Login Successful",
+                        'access_token': str(refresh.access_token),
+                        'role':user.role.short_name,
+                        'expires_in': '3600',
+                        'token_type': 'Bearer'
+                    }, status=status.HTTP_200_OK)
             
         except Exception as e:
             print(str(e))
@@ -528,6 +531,7 @@ class UserRegisterAPIView(APIVIEW):
                 body = f'Use otp {otp} to complete registration'
 
                 LoginOTP.objects.create(mobile_number=user.mobile_number, otp=otp)
+                transaction.commit()
                 
                 return Response({
                     'status': True,
@@ -1067,3 +1071,23 @@ class UserProfileAPIView(APIVIEW):
                 'status': False,
                 'message': 'Could not view tenant profile'
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+class AllPropertiesAPIView(APIVIEW):
+    authentication_classes = []
+    serializer_class = AllProperiesSerializer
+
+    def get(self, request):
+        try:
+
+            all_properties = Property.objects.all().order_by('-id')
+            serializer = self.serializer_class(all_properties, many=True)
+
+            return Response({
+                "status": True,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        
+        except IntegrityError as e:
+            print("An integrity error occured")
+
+        
