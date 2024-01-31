@@ -3,6 +3,7 @@ import re
 import datetime
 import requests
 import base64
+import logging
 from decimal import Decimal
 
 from rest_framework.views import APIView
@@ -118,8 +119,6 @@ class PayServiceAPIView(APIView):
             service_charge = tenant.PropertyBlock.service_charge
             service_charge = int(service_charge)
 
-            annual_charge = service_charge * 12
-
             mpesa = 'mpesa'
             card = 'card'
 
@@ -146,10 +145,11 @@ class PayServiceAPIView(APIView):
                 message_bytes = message.encode('ascii')
                 base64_bytes = base64.b64encode(message_bytes)
                 password = base64_bytes.decode('ascii')
-                CallBackURL = 'https://webhook.site/2ef99e8c-6df5-43e5-a43e-e19264215797'
+                CallBackURL = 'https://api.smartnyumba.com/apps/api/v1/tenant-services/mpesa-callback/'
 
-                # CallBackURL = "https://y34b2e7j9d.execute-api.us-west-1.amazonaws.com/dev/apps/admin/api/v1/tenant-services/mpesa-callback/"
-                # put correct domain
+                logger = logging.getLogger('django.server')
+                logger.info("This is the call back url"+CallBackURL)
+
                 payload = {
                     "BusinessShortCode": 174379,
                     "Password": password,
@@ -174,12 +174,14 @@ class PayServiceAPIView(APIView):
                         user=user,
                         service_name=service_name,
                         amount=service_charge,
-                        annual_service_charge=annual_charge,
-                        payment_mode=pay_via                    )
+                        payment_mode=pay_via
+                    )
                     Service.save()
                     json_response = json.loads(response.text)
                     Service.MerchantRequestID = json_response['MerchantRequestID']
                     Service.CheckoutRequestID = json_response['CheckoutRequestID']
+                    logger.info(json_response)
+            
 
                     Service.save()
 
@@ -245,6 +247,8 @@ class MpesaCallBackAPIView(APIView):
 
         print("Mpesa Callback started.....")
         print("Callback data: ", data)
+        logger = logging.getLogger('django.server')
+        logger.info("Mpesa Callback received")
 
         {
             "data": {
@@ -300,11 +304,11 @@ class MpesaCallBackAPIView(APIView):
                 }, status=status.HTTP_404_NOT_FOUND)
             
             Service = Service.first()
-            Service.annual_service_charge -= Service.amount
             Service.status = 1
             Service.save()
 
             print("Service updated from db: ", Service)
+            logger.info("Transaction updated successfully")
 
             return Response({
                 'status': True,
