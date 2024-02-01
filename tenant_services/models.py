@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from services.choices import PAYMENTS
 
 user = get_user_model()
+####
 
 class services(models.Model):
     user = models.ForeignKey(user, on_delete=models.SET_NULL, null=True)
