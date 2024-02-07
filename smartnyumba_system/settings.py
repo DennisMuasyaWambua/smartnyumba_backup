@@ -37,7 +37,6 @@ INSTALLED_APPS = [
     'admin_api.apps.AdminApiConfig',
     'properties.apps.PropertiesConfig',
     'rest_framework',
-    'storages',
     'corsheaders',
     'rest_framework_simplejwt.token_blacklist',
     'tenant_services.apps.TenantServicesConfig',
@@ -106,6 +105,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    "whitenoise.middleware.WhiteNoiseMiddleware",
 ]
 
 ROOT_URLCONF = 'smartnyumba_system.urls'
@@ -187,7 +187,9 @@ USE_TZ = True
 
 
 # STATIC_URL = '/static/'
-
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
+STATICFILES_STORAGE="whitenoise.storage.CompressedManifestStaticFilesStorage"
 # MEDIA_URL = '/media/'
 # STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 # MEDIA_ROOT = BASE_DIR / 'media'
@@ -218,11 +220,11 @@ BUSINESS_SHORT_CODE=config('BUSINESS_SHORT_CODE')
 STRIPE_SECRET_KEY=config('STRIPE_SECRET_KEY')
 SUCCESS_URL=config('SUCCESS_URL')
 CANCEL_URL=config('CANCEL_URL')
-AWS_ACCESS_KEY_ID = "AKIA5GEVZE6FH6MHYVKI"
-AWS_SECRET_ACCESS_KEY = "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"
-AWS_STORAGE_BUCKET_NAME = 'myzappa'
-AWS_S3_REGION_NAME = 'eu-west-1'
-AWS_S3_SIGNATURE_VERSION = 's3v4'
-AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
-STATICFILES_STORAGE = 'smartnyumba_system.storages.StaticStorage'
-STATIC_URL = 'https://' + AWS_S3_CUSTOM_DOMAIN + '/static/'
+# AWS_ACCESS_KEY_ID = "AKIA5GEVZE6FH6MHYVKI"
+# AWS_SECRET_ACCESS_KEY = "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"
+# AWS_STORAGE_BUCKET_NAME = 'myzappa'
+# AWS_S3_REGION_NAME = 'eu-west-1'
+# AWS_S3_SIGNATURE_VERSION = 's3v4'
+# AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
+# STATICFILES_STORAGE = 'smartnyumba_system.storages.StaticStorage'
+# STATIC_URL = 'https://' + AWS_S3_CUSTOM_DOMAIN + '/static/'
