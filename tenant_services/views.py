@@ -118,6 +118,8 @@ class PayServiceAPIView(APIView):
             service_charge = tenant.PropertyBlock.service_charge
             service_charge = int(service_charge)
 
+            annual_charge = service_charge * 12
+
             mpesa = 'mpesa'
             card = 'card'
 
@@ -172,6 +174,7 @@ class PayServiceAPIView(APIView):
                         user=user,
                         service_name=service_name,
                         amount=service_charge,
+                        annual_service_charge=annual_charge,
                         payment_mode=pay_via                    )
                     Service.save()
                     json_response = json.loads(response.text)
