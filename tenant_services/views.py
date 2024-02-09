@@ -149,7 +149,7 @@ class PayServiceAPIView(APIView):
                 CallBackURL = 'https://webhook.site/2ef99e8c-6df5-43e5-a43e-e19264215797'
 
                 # CallBackURL = "https://y34b2e7j9d.execute-api.us-west-1.amazonaws.com/dev/apps/admin/api/v1/tenant-services/mpesa-callback/"
-
+                # put correct domain
                 payload = {
                     "BusinessShortCode": 174379,
                     "Password": password,
