@@ -146,7 +146,7 @@ class PayServiceAPIView(APIView):
                 message_bytes = message.encode('ascii')
                 base64_bytes = base64.b64encode(message_bytes)
                 password = base64_bytes.decode('ascii')
-                CallBackURL = 'https://webhook.site/2ef99e8c-6df5-43e5-a43e-e19264215797'
+                CallBackURL = 'https://api.smartnyumba.com/apps/api/v1/tenant-services/mpesa-callback'
 
                 # CallBackURL = "https://y34b2e7j9d.execute-api.us-west-1.amazonaws.com/dev/apps/admin/api/v1/tenant-services/mpesa-callback/"
                 # put correct domain
