@@ -706,10 +706,11 @@ class UserLoginAPIView(APIVIEW):
             return Response({
                     "status": True,
                     "message": "Login Successful",
-                    "role":user.role.short_name,
                     'access_token': str(refresh.access_token),
                     'expires_in': '3600',
-                    'token_type': 'Bearer'
+                    'token_type': 'Bearer',
+                    "role":user.role.short_name,
+
                 }, status=status.HTTP_200_OK)
             
         except Exception as e:
