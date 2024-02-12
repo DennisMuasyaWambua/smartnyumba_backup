@@ -129,28 +129,28 @@ WSGI_APPLICATION = 'smartnyumba_system.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': config("DATABASE_NAME"),
-        'USER': config("DATABASE_USER"),
-        'PASSWORD': config("DATABASE_PASSWORD"),
-        'HOST': config("DATABASE_HOST"),
-        'PORT': '3306',
-    }
-}
-
 # DATABASES = {
-#   'default': {
-#     'ENGINE': config('DB_ENGINE'),
-#     'NAME': config('DB_NAME'),
-#     'HOST': config('DB_HOST'),
-#     'PORT': config('DB_PORT'),
-#     'USER': config('DB_USER'),
-#     'PASSWORD': config('DB_PASSWORD'),
-#     # 'OPTIONS': {'ssl': {'ca': config('MYSQL_ATTR_SSL_CA')}, 'charset': 'utf8mb4'}
-#   }
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': config("DATABASE_NAME"),
+#         'USER': config("DATABASE_USER"),
+#         'PASSWORD': config("DATABASE_PASSWORD"),
+#         'HOST': config("DATABASE_HOST"),
+#         'PORT': '3306',
+#     }
 # }
+
+DATABASES = {
+  'default': {
+    'ENGINE': config('DB_ENGINE'),
+    'NAME': config('DB_NAME'),
+    'HOST': config('DB_HOST'),
+    'PORT': config('DB_PORT'),
+    'USER': config('DB_USER'),
+    'PASSWORD': config('DB_PASSWORD'),
+    # 'OPTIONS': {'ssl': {'ca': config('MYSQL_ATTR_SSL_CA')}, 'charset': 'utf8mb4'}
+  }
+}
 
 
 
