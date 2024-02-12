@@ -129,28 +129,28 @@ WSGI_APPLICATION = 'smartnyumba_system.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': config("DATABASE_NAME"),
-#         'USER': config("DATABASE_USER"),
-#         'PASSWORD': config("DATABASE_PASSWORD"),
-#         'HOST': config("DATABASE_HOST"),
-#         'PORT': '3306',
-#     }
-# }
-
 DATABASES = {
-  'default': {
-    'ENGINE': config('DB_ENGINE'),
-    'NAME': config('DB_NAME'),
-    'HOST': config('DB_HOST'),
-    'PORT': config('DB_PORT'),
-    'USER': config('DB_USER'),
-    'PASSWORD': config('DB_PASSWORD'),
-    # 'OPTIONS': {'ssl': {'ca': config('MYSQL_ATTR_SSL_CA')}, 'charset': 'utf8mb4'}
-  }
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': config("DATABASE_NAME"),
+        'USER': config("DATABASE_USER"),
+        'PASSWORD': config("DATABASE_PASSWORD"),
+        'HOST': config("DATABASE_HOST"),
+        'PORT': '3306',
+    }
 }
+
+# DATABASES = {
+#   'default': {
+#     'ENGINE': config('DB_ENGINE'),
+#     'NAME': config('DB_NAME'),
+#     'HOST': config('DB_HOST'),
+#     'PORT': config('DB_PORT'),
+#     'USER': config('DB_USER'),
+#     'PASSWORD': config('DB_PASSWORD'),
+#     # 'OPTIONS': {'ssl': {'ca': config('MYSQL_ATTR_SSL_CA')}, 'charset': 'utf8mb4'}
+#   }
+# }
 
 
 
@@ -223,11 +223,3 @@ SUCCESS_URL=config('SUCCESS_URL')
 CANCEL_URL=config('CANCEL_URL')
 
 
-AWS_ACCESS_KEY_ID = "AKIA5GEVZE6FH6MHYVKI"
-AWS_SECRET_ACCESS_KEY = "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"
-AWS_STORAGE_BUCKET_NAME = 'myzappa'
-AWS_S3_REGION_NAME = 'eu-west-1'
-AWS_S3_SIGNATURE_VERSION = 's3v4'
-AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
-STATICFILES_STORAGE = 'smartnyumba_system.storages.StaticStorage'
-STATIC_URL = 'https://' + AWS_S3_CUSTOM_DOMAIN + '/static/'
