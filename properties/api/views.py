@@ -146,7 +146,6 @@ class AddBlockHousesAPIView(APIView):
             PropertyBlock.objects.create(block=check_block_number, 
                                         house_number=house_number, 
                                         service_charge=service_charge,  
-                                        annual_service_charge = service_charge *12,
                                         rent_charged=rent_charged, 
                                         rent_due_date=rent_due_date)
 
