@@ -706,6 +706,7 @@ class UserLoginAPIView(APIVIEW):
             return Response({
                     "status": True,
                     "message": "Login Successful",
+                    "role":user.role.short_name,
                     'access_token': str(refresh.access_token),
                     'expires_in': '3600',
                     'token_type': 'Bearer'
