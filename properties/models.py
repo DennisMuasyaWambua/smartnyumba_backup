@@ -18,6 +18,7 @@ class Property(models.Model):
 class PropertyBlock(models.Model):
     block = models.ForeignKey(Property, on_delete=models.SET_NULL, null=True)
     house_number = models.CharField(max_length=10, null=False)
+    #check this
     service_charge = models.DecimalField(decimal_places=2, max_digits=7)
     annual_service_charge = models.DecimalField(decimal_places=2, max_digits=7)
     rent_charged = models.DecimalField(decimal_places=2, max_digits=7)
