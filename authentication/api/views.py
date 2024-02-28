@@ -531,8 +531,7 @@ class UserRegisterAPIView(APIVIEW):
                 body = f'Use otp {otp} to complete registration'
 
                 LoginOTP.objects.create(mobile_number=user.mobile_number, otp=otp)
-                transaction.commit()
-                
+              
                 return Response({
                     'status': True,
                     'message': 'Smart nyumba tenant created successfully'
