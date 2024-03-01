@@ -94,7 +94,7 @@ class AdminLoginAPIView(APIVIEW):
                     })
                 
                 refresh = RefreshToken.for_user(user)
-                transaction.commit()
+               
                 
                 return Response({
                         "status": True,
