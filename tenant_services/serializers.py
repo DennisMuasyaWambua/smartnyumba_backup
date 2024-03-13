@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from authentication.api.serializers import UserProfileSerializer
 from properties.models import PropertyBlock
 
 from tenant_services.models import services
@@ -16,6 +17,7 @@ class PayServiceSerializer(serializers.Serializer):
 
 
 class AllTRansactionsSerializer(serializers.ModelSerializer):
+    user = UserProfileSerializer()
     
     class Meta:
         model = services
