@@ -93,6 +93,7 @@ class TenantProfileSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class AllProperiesSerializer(serializers.ModelSerializer):
+    
     class Meta:
         model = Property
         fields = ['location', 'block_number']

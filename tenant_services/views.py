@@ -147,9 +147,6 @@ class PayServiceAPIView(APIView):
                 base64_bytes = base64.b64encode(message_bytes)
                 password = base64_bytes.decode('ascii')
                 CallBackURL = 'https://api.smartnyumba.com/apps/api/v1/tenant-services/mpesa-callback/'
-
-                # CallBackURL = "https://y34b2e7j9d.execute-api.us-west-1.amazonaws.com/dev/apps/admin/api/v1/tenant-services/mpesa-callback/"
-                # put correct domain
                 payload = {
                     "BusinessShortCode": 174379,
                     "Password": password,
@@ -334,7 +331,7 @@ class AllTransactionsAPIView(APIView):
                     'message': 'Role not allowed to access this portal!'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            user = User.objects.filter(email=current_user).first()            
+            user = User.objects.filter(user=current_user).first()            
             all_services = services.objects.filter(user=user, status=1).order_by('-id')
 
             serializer = self.serializer_class(all_services, many=True)
