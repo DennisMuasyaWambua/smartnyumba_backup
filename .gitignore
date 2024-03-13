@@ -399,8 +399,6 @@ fabric.properties
 
 # mypy
 
-# Pyre type checker
-
 # pytype static type analyzer
 
 # Cython debug symbols
