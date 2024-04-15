@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from authentication.models import Tenant
+from authentication.models import Tenant, staffAdmin
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -91,6 +91,13 @@ class TenantProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
         fields = '__all__'
+
+class AdminProfileSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = staffAdmin
+        fields = '__all__'
+
 
 class AllProperiesSerializer(serializers.ModelSerializer):
     

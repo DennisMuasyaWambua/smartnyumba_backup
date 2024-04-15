@@ -17,7 +17,7 @@ from properties.models import Property, PropertyBlock
 
 User = get_user_model()
 
-from authentication.api.serializers import AdminLogOutSerializer, AllProperiesSerializer, ForgotPasswordSerializer, LoginSerializer, NewPasswordSerializer, ResendOtpSerializer, TenantProfileSerializer, UserLogOutSerializer, UserRegisterSerializer, UserRegisterVerificationSerializer, VerifyChangePasswordSerializer
+from authentication.api.serializers import AdminLogOutSerializer, AdminProfileSerializer, AllProperiesSerializer, ForgotPasswordSerializer, LoginSerializer, NewPasswordSerializer, ResendOtpSerializer, TenantProfileSerializer, UserLogOutSerializer, UserRegisterSerializer, UserRegisterVerificationSerializer, VerifyChangePasswordSerializer
 
 
 class AdminLoginAPIView(APIVIEW):
@@ -1050,6 +1050,47 @@ class UserProfileAPIView(APIVIEW):
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             user = Tenant.objects.filter(email=current_user)
+            if not user.exists():
+                return Response({
+                    'status': False,
+                    'message': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            user = user.first()
+
+            serializer = self.serializer_class(user)
+
+            return Response({
+                'status': False,
+                'profile': serializer.data 
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(str(e))
+
+            return Response({
+                'status': False,
+                'message': 'Could not view tenant profile'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+class AdminProfileAPIView(APIVIEW):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AdminProfileSerializer
+
+    def get(self, request):
+        try:
+            current_user = request.user
+
+            current_user = request.user
+            allowed_roles = ['admin']
+
+            if not current_user.role.short_name in allowed_roles:
+                return Response({
+                    'status': False,
+                    'message': 'Role not allowed to access this portal!'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = staffAdmin.objects.filter(email=current_user)
             if not user.exists():
                 return Response({
                     'status': False,
