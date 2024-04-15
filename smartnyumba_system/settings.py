@@ -132,21 +132,21 @@ WSGI_APPLICATION = 'smartnyumba_system.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': config("DATABASE_NAME"),
-        'USER': config("DATABASE_USER"),
-        'PASSWORD': config("DATABASE_PASSWORD"),
-        'HOST': config("DATABASE_HOST"),
-        'PORT': '3306',
-    }
-}
-
-
 # DATABASES = {
-#   'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': config("DATABASE_NAME"),
+#         'USER': config("DATABASE_USER"),
+#         'PASSWORD': config("DATABASE_PASSWORD"),
+#         'HOST': config("DATABASE_HOST"),
+#         'PORT': '3306',
+#     }
 # }
+
+
+DATABASES = {
+  'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
+}
 
 
 
