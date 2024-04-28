@@ -148,16 +148,16 @@ class PayServiceAPIView(APIView):
                 password = base64_bytes.decode('ascii')
                 CallBackURL = 'https://api.smartnyumba.com/apps/api/v1/tenant-services/mpesa-callback/'
                 payload = {
-                    "BusinessShortCode": 174379,
+                    "BusinessShortCode": Business_short_code,
                     "Password": password,
                     "Timestamp": timestamp,
                     "TransactionType": "CustomerPayBillOnline",
                     "Amount": service_charge,
                     "PartyA": mobile_number,
-                    "PartyB": '174379',
+                    "PartyB": f'{Business_short_code}',
                     "PhoneNumber": mobile_number,
                     "CallBackURL": CallBackURL,
-                    "AccountReference": "SmartNyumbaLTD",
+                    "AccountReference": "SmartNyumba",
                     "TransactionDesc": "Payment of X" 
                 }
 
