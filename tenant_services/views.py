@@ -151,7 +151,7 @@ class PayServiceAPIView(APIView):
                     "BusinessShortCode": Business_short_code,
                     "Password": password,
                     "Timestamp": timestamp,
-                    "TransactionType": "CustomerPayBillOnline",
+                    "TransactionType": "CustomerBuyGoodsOnline",
                     "Amount": service_charge,
                     "PartyA": mobile_number,
                     "PartyB": f'{Business_short_code}',
