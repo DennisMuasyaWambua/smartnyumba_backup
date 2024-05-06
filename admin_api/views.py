@@ -30,7 +30,7 @@ class AllTenantPaymentsAPIView(APIView):
                     'message': 'Role not allowed to access this portal!'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            all_services = services.objects.filter(status=1).order_by('-id')
+            all_services = services.objects.filter(status=0).order_by('-id')
 
             serializer = self.serializer_class(all_services, many=True)
 

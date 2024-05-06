@@ -343,7 +343,7 @@ class AllTransactionsAPIView(APIView):
             block = tenant.PropertyBlock.block.block_number
             print(house_number)
             print(block)
-            all_services = services.objects.filter(user=user, status=0).order_by('-id')
+            all_services = services.objects.filter(user=user, status=1).order_by('-id')
 
             print(all_services)
 
