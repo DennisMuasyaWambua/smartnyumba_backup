@@ -141,6 +141,7 @@ class PayServiceAPIView(APIView):
                 
 
                 pass_key = settings.SAFARICOM_PASS_KEY
+                tillNumber = settings.TILL_NUMBER
 
                 message = str(Business_short_code)+ pass_key + timestamp
                 message_bytes = message.encode('ascii')
@@ -148,16 +149,16 @@ class PayServiceAPIView(APIView):
                 password = base64_bytes.decode('ascii')
                 CallBackURL = 'https://api.smartnyumba.com/apps/api/v1/tenant-services/mpesa-callback/'
                 payload = {
-                    "BusinessShortCode": 174379,
+                    "BusinessShortCode": Business_short_code,
                     "Password": password,
                     "Timestamp": timestamp,
-                    "TransactionType": "CustomerPayBillOnline",
+                    "TransactionType": "CustomerBuyGoodsOnline",
                     "Amount": service_charge,
                     "PartyA": mobile_number,
-                    "PartyB": '174379',
+                    "PartyB": f'{tillNumber}',
                     "PhoneNumber": mobile_number,
                     "CallBackURL": CallBackURL,
-                    "AccountReference": "SmartNyumbaLTD",
+                    "AccountReference": "SmartNyumba",
                     "TransactionDesc": "Payment of X" 
                 }
 
