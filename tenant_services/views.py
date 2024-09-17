@@ -141,6 +141,7 @@ class PayServiceAPIView(APIView):
                 
 
                 pass_key = settings.SAFARICOM_PASS_KEY
+                tillNumber = settings.TILL_NUMBER
 
                 message = str(Business_short_code)+ pass_key + timestamp
                 message_bytes = message.encode('ascii')
@@ -148,16 +149,16 @@ class PayServiceAPIView(APIView):
                 password = base64_bytes.decode('ascii')
                 CallBackURL = 'https://api.smartnyumba.com/apps/api/v1/tenant-services/mpesa-callback/'
                 payload = {
-                    "BusinessShortCode": 174379,
+                    "BusinessShortCode": Business_short_code,
                     "Password": password,
                     "Timestamp": timestamp,
-                    "TransactionType": "CustomerPayBillOnline",
+                    "TransactionType": "CustomerBuyGoodsOnline",
                     "Amount": service_charge,
                     "PartyA": mobile_number,
-                    "PartyB": '174379',
+                    "PartyB": f'{tillNumber}',
                     "PhoneNumber": mobile_number,
                     "CallBackURL": CallBackURL,
-                    "AccountReference": "SmartNyumbaLTD",
+                    "AccountReference": "SmartNyumba",
                     "TransactionDesc": "Payment of X" 
                 }
 
@@ -325,20 +326,40 @@ class AllTransactionsAPIView(APIView):
             print(current_user)
             allowed_roles = ['tenant']
 
+            print(current_user.role.short_name)
+            
+
             if not current_user.role.short_name in allowed_roles:
                 return Response({
                     'status': False,
                     'message': 'Role not allowed to access this portal!'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            user = User.objects.filter(user=current_user).first()            
+            print("we are here...")
+            user = User.objects.filter(email=current_user).first()  
+            print(user)          
+            tenant = Tenant.objects.filter(user=user).first()
+            PropertyBlock = tenant.PropertyBlock
+            house_number = tenant.PropertyBlock.house_number
+            block = tenant.PropertyBlock.block.block_number
+            print(house_number)
+            print(block)
             all_services = services.objects.filter(user=user, status=1).order_by('-id')
+
+            print(all_services)
 
             serializer = self.serializer_class(all_services, many=True)
 
+            transactions_with_details = []
+            for service_data, service in zip(serializer.data, all_services):
+                block = block
+                if block:
+                    service_data['house_number'] = house_number
+                    service_data['block_number'] = block
+                transactions_with_details.append(service_data)
+
             return Response({
                 'status': True,
-                'transactions': serializer.data
+                'transactions': transactions_with_details
             }, status=status.HTTP_200_OK)
         
 

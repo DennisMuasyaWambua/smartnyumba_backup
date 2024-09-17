@@ -19,7 +19,7 @@ def get_access_token():
             'Authorization': f'Basic {base64_auth_header}'
         }
 
-        response = requests.request("GET", 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', headers = headers)
+        response = requests.request("GET", token_endpoint+'?grant_type=client_credentials', headers = headers)
         if response.status_code == 200:
             response_data = response.json()
             access_token = response_data.get('access_token')

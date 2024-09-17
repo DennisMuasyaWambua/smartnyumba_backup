@@ -209,6 +209,7 @@ EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS",default=False, cast=bool)
 EMAIL_USE_SSL = config("EMAIL_USE_SSL",default=True, cast=bool)
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+TILL_NUMBER = config("TILL_NUMBER")
 
 SAFARICOM_AUTH_ENDPOINT=config('SAFARICOM_AUTH_ENDPOINT')
 SAFARICOM_AUTH_KEY=config('SAFARICOM_AUTH_KEY')
