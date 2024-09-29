@@ -6,12 +6,7 @@ from django.conf import settings
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATABASE_URL = "postgresql://postgres:*dd-FaG6BFBACc6fD3BG1C1Ee55gbc4A@roundhouse.proxy.rlwy.net:47968/railway"
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -143,11 +138,28 @@ WSGI_APPLICATION = 'smartnyumba_system.wsgi.application'
 #     }
 # }
 
+ENVIRONMENT = config('ENVIRONMENT')
 
-DATABASES = {
-  'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
-}
 
+
+if ENVIRONMENT:
+    DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": config("DATABASE_NAME"),
+        "USER": config("DATABASE_USER"),
+        "PASSWORD": config("DATABASE_PASSWORD"),
+        "HOST": config("DATABASE_HOST"),
+        "PORT": "3306",
+    }
+} 
+
+else:
+    DATABASE_URL = "postgresql://postgres:*dd-FaG6BFBACc6fD3BG1C1Ee55gbc4A@roundhouse.proxy.rlwy.net:47968/railway"
+
+    DATABASES = {
+    'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
+    }
 
 
 
@@ -221,3 +233,13 @@ BUSINESS_SHORT_CODE=config('BUSINESS_SHORT_CODE')
 STRIPE_SECRET_KEY=config('STRIPE_SECRET_KEY')
 SUCCESS_URL=config('SUCCESS_URL')
 CANCEL_URL=config('CANCEL_URL')
+
+
+SAFARICOM_BC2_AUTH_KEY=config('SAFARICOM_BC2_AUTH_KEY')
+SAFARICOM_B2C_CONSUMER_TIME=config('SAFARICOM_B2C_CONSUMER_TIME')
+SAFARICOM_B2C_ENDPOINT=config('SAFARICOM_B2C_ENDPOINT')
+SAFARICOM_B2C_INITIATOR_PASSWORD = config('SAFARICOM_B2C_INITIATOR_PASSWORD')
+SAFARICOM_B2C_INITIATOR_NAME = config('SAFARICOM_B2C_INITIATOR_NAME')
+SAFARICOM_B2C_QUEUETIMEOUTURL = config('SAFARICOM_B2C_QUEUETIMEOUTURL')
+SAFARICOM_B2C_RESULTURL = config('SAFARICOM_B2C_RESULTURL')
+SAFARICOM_B2C_PARTYA = config('SAFARICOM_B2C_PARTYA')
