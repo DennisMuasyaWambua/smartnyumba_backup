@@ -1,6 +1,9 @@
 from django.contrib import admin
 
-from tenant_services.models import services
+from properties.models import ServiceChargeCollection
+from tenant_services.models import serviceTransactions, services
 
 
 admin.site.register(services)
+admin.site.register(ServiceChargeCollection)
+admin.site.register(serviceTransactions)

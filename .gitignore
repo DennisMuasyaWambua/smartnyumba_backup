@@ -1,6 +1,10 @@
 # Created by https://www.toptal.com/developers/gitignore/api/linux,windows,django,python,visualstudiocode,sublimetext,pycharm+all,intellij+all
 # Edit at https://www.toptal.com/developers/gitignore?templates=linux,windows,django,python,visualstudiocode,sublimetext,pycharm+all,intellij+all
 
+
+*.cer
+
+
 ### Django ###
 *.log
 *.pot
