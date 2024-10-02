@@ -142,24 +142,24 @@ ENVIRONMENT = config('ENVIRONMENT')
 
 
 
-if ENVIRONMENT:
-    DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.mysql",
-        "NAME": config("DATABASE_NAME"),
-        "USER": config("DATABASE_USER"),
-        "PASSWORD": config("DATABASE_PASSWORD"),
-        "HOST": config("DATABASE_HOST"),
-        "PORT": "3306",
-    }
-} 
+# if ENVIRONMENT:
+#     DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.postgresql",
+#         "NAME": config("DATABASE_NAME"),
+#         "USER": config("DATABASE_USER"),
+#         "PASSWORD": config("DATABASE_PASSWORD"),
+#         "HOST": config("DATABASE_HOST"),
+#         "PORT": "5432",
+#     }
+# } 
 
-else:
-    DATABASE_URL = "postgresql://postgres:*dd-FaG6BFBACc6fD3BG1C1Ee55gbc4A@roundhouse.proxy.rlwy.net:47968/railway"
+# else:
+DATABASE_URL = "postgresql://postgres:*dd-FaG6BFBACc6fD3BG1C1Ee55gbc4A@roundhouse.proxy.rlwy.net:47968/railway"
 
-    DATABASES = {
-    'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
-    }
+DATABASES = {
+'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
+}
 
 
 
