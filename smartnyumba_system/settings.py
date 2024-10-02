@@ -138,7 +138,7 @@ WSGI_APPLICATION = 'smartnyumba_system.wsgi.application'
 #     }
 # }
 
-ENVIRONMENT = config('ENVIRONMENT')
+# ENVIRONMENT = config('ENVIRONMENT')
 
 
 
