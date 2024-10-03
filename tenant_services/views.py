@@ -255,10 +255,10 @@ class MpesaCallBackAPIView(APIView):
                     }
                 }
             }
-        ResponseCode = data['data']['Body']['stkCallback']['ResultCode']
+        ResponseCode = data['Body']['stkCallback']['ResultCode']
 
-        CheckoutRequestID = data['data']['Body']['stkCallback']['CheckoutRequestID']
-        MerchantRequestID = data['data']['Body']['stkCallback']['MerchantRequestID']
+        CheckoutRequestID = data['Body']['stkCallback']['CheckoutRequestID']
+        MerchantRequestID = data['Body']['stkCallback']['MerchantRequestID']
 
         print("CheckoutRequestID: ", CheckoutRequestID)
         print("MerchantRequestID: ", MerchantRequestID)
