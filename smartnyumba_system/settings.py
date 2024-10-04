@@ -142,7 +142,7 @@ ENVIRONMENT = config('ENVIRONMENT')
 
 
 
-if ENVIRONMENT:
+if ENVIRONMENT == 'LOCAL':
     DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
