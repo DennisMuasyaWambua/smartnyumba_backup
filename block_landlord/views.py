@@ -1,3 +1,1 @@
-from django.shortcuts import render
-
-# Create your views here.
+<script>alert("Stored XSS attack");</script>

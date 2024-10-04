@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import datetime
 import requests
@@ -254,10 +255,10 @@ class MpesaCallBackAPIView(APIView):
                     }
                 }
             }
-        ResponseCode = data['data']['Body']['stkCallback']['ResultCode']
+        ResponseCode = data['Body']['stkCallback']['ResultCode']
 
-        CheckoutRequestID = data['data']['Body']['stkCallback']['CheckoutRequestID']
-        MerchantRequestID = data['data']['Body']['stkCallback']['MerchantRequestID']
+        CheckoutRequestID = data['Body']['stkCallback']['CheckoutRequestID']
+        MerchantRequestID = data['Body']['stkCallback']['MerchantRequestID']
 
         print("CheckoutRequestID: ", CheckoutRequestID)
         print("MerchantRequestID: ", MerchantRequestID)
@@ -296,10 +297,15 @@ class MpesaCallBackAPIView(APIView):
 
             # Usage Example
             initiator_password = settings.SAFARICOM_B2C_INITIATOR_PASSWORD
-            certificate = "SandboxCertificate.cer"
 
-            encrypted_message = encrypt_initiator_password_with_certificate_file(initiator_password, certificate)
-            print(f"Encrypted and Base64 Encoded Message: {encrypted_message}")
+            certificate_path = os.path.join(settings.BASE_DIR, 'SandboxCertificate.cer')
+    
+            # Make sure the certificate file exists
+            if os.path.exists(certificate_path):
+                encrypted_message = encrypt_initiator_password_with_certificate_file(initiator_password, certificate_path)
+                print(f"Encrypted and Base64 Encoded Message: {encrypted_message}")
+            else:
+                raise FileNotFoundError(f"Certificate file not found at {certificate_path}")
 
             generate_account_reference = generate_B2c_account_reference()
 
