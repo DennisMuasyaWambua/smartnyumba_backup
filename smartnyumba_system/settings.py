@@ -142,7 +142,7 @@ ENVIRONMENT = config('ENVIRONMENT')
 
 
 
-if ENVIRONMENT:
+if ENVIRONMENT == 'LOCAL':
     DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -155,7 +155,7 @@ if ENVIRONMENT:
 } 
 
 else:
-    DATABASE_URL = config("DATABASE_URL")
+    DATABASE_URL = config("MY_DATABASE_URL")
 
     DATABASES = {
     'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
@@ -222,7 +222,7 @@ EMAIL_USE_TLS = config("EMAIL_USE_TLS",default=False, cast=bool)
 EMAIL_USE_SSL = config("EMAIL_USE_SSL",default=True, cast=bool)
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 TILL_NUMBER = config("TILL_NUMBER")
-DATABASE_URL = config("MY_DATABASE_URL")
+MY_DATABASE_URL = config("MY_DATABASE_URL")
 DB_PORT = config("DB_PORT")
 
 SAFARICOM_AUTH_ENDPOINT=config('SAFARICOM_AUTH_ENDPOINT')
