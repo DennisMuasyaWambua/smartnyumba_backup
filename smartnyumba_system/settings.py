@@ -138,28 +138,28 @@ WSGI_APPLICATION = 'smartnyumba_system.wsgi.application'
 #     }
 # }
 
-# ENVIRONMENT = config('ENVIRONMENT')
+ENVIRONMENT = config('ENVIRONMENT')
 
 
 
-# if ENVIRONMENT:
-#     DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.postgresql",
-#         "NAME": config("DATABASE_NAME"),
-#         "USER": config("DATABASE_USER"),
-#         "PASSWORD": config("DATABASE_PASSWORD"),
-#         "HOST": config("DATABASE_HOST"),
-#         "PORT": "5432",
-#     }
-# } 
+if ENVIRONMENT:
+    DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": config("DATABASE_NAME"),
+        "USER": config("DATABASE_USER"),
+        "PASSWORD": config("DATABASE_PASSWORD"),
+        "HOST": config("DATABASE_HOST"),
+        "PORT": config("DB_PORT"),
+    }
+} 
 
-# else:
-DATABASE_URL = "postgresql://postgres:*dd-FaG6BFBACc6fD3BG1C1Ee55gbc4A@roundhouse.proxy.rlwy.net:47968/railway"
+else:
+    DATABASE_URL = config("DATABASE_URL")
 
-DATABASES = {
-'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
-}
+    DATABASES = {
+    'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
+    }
 
 
 
@@ -222,6 +222,8 @@ EMAIL_USE_TLS = config("EMAIL_USE_TLS",default=False, cast=bool)
 EMAIL_USE_SSL = config("EMAIL_USE_SSL",default=True, cast=bool)
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 TILL_NUMBER = config("TILL_NUMBER")
+DATABASE_URL = config("MY_DATABASE_URL")
+DB_PORT = config("DB_PORT")
 
 SAFARICOM_AUTH_ENDPOINT=config('SAFARICOM_AUTH_ENDPOINT')
 SAFARICOM_AUTH_KEY=config('SAFARICOM_AUTH_KEY')
