@@ -138,9 +138,7 @@ WSGI_APPLICATION = 'smartnyumba_system.wsgi.application'
 #     }
 # }
 
-ENVIRONMENT = config('ENVIRONMENT')
-
-
+# ENVIRONMENT = config('ENVIRONMENT')
 
 if ENVIRONMENT == 'LOCAL':
     DATABASES = {
@@ -153,13 +151,12 @@ if ENVIRONMENT == 'LOCAL':
         "PORT": "3306",
     }
 } 
-
 else:
-    DATABASE_URL = "postgresql://postgres:*dd-FaG6BFBACc6fD3BG1C1Ee55gbc4A@roundhouse.proxy.rlwy.net:47968/railway"
+  DATABASE_URL = "postgresql://postgres:*dd-FaG6BFBACc6fD3BG1C1Ee55gbc4A@roundhouse.proxy.rlwy.net:47968/railway"
 
-    DATABASES = {
-    'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
-    }
+  DATABASES = {
+  'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
+  }
 
 
 
