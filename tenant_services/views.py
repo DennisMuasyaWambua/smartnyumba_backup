@@ -115,6 +115,7 @@ class PayServiceAPIView(APIView):
                 }
                 endpoint = settings.SAFARICOM_STK_PUSH
                 Business_short_code = settings.BUSINESS_SHORT_CODE
+                partyB = settings.TILL_NUMBER
                 timestamp = f"{datetime.datetime.now():%Y%m%d%H%M%S}"
                 pass_key = settings.SAFARICOM_PASS_KEY
                 message = f'{Business_short_code}{pass_key}{timestamp}'
@@ -129,7 +130,7 @@ class PayServiceAPIView(APIView):
                     "TransactionType": "CustomerBuyGoodsOnline",
                     "Amount": int(service_charge),
                     "PartyA": mobile_number,
-                    "PartyB": Business_short_code,
+                    "PartyB": partyB,
                     "PhoneNumber": mobile_number,
                     "CallBackURL": CallBackURL,
                     "AccountReference": "SmartNyumba",
