@@ -299,7 +299,8 @@ class MpesaCallBackAPIView(APIView):
             # Usage Example
             initiator_password = settings.SAFARICOM_B2C_INITIATOR_PASSWORD
 
-            certificate_path = os.path.join(settings.BASE_DIR, 'SandboxCertificate.cer')
+            certificate_path = settings.B2C_CER
+            #os.path.join(settings.BASE_DIR, 'SandboxCertificate.cer')
     
             # Make sure the certificate file exists
             if os.path.exists(certificate_path):
