@@ -482,8 +482,8 @@ ehthumbs_vista.db
 
 # Dump file
 *.stackdump
-Dockerfile
-compose.yaml
+Dockerfile/
+*.yaml
 *.gitignore
 # Folder config file
 [Dd]esktop.ini
