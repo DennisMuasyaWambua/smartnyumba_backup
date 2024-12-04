@@ -15,6 +15,7 @@ class services(models.Model):
     amount = models.DecimalField(max_digits=7, decimal_places=2, null=False)
     payment_mode = models.CharField(default='mpesa', max_length=15, choices=PAYMENTS)
     balance_service_charge = models.DecimalField(decimal_places=2, max_digits=7, default=1)
+    status = models.IntegerField(default=0)
 
     class Meta:
         db_table = 'services'
