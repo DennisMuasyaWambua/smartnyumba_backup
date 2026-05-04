@@ -3,7 +3,7 @@ from authentication.api.serializers import UserProfileSerializer
 from authentication.models import Tenant, User
 from properties.models import Property, PropertyBlock
 
-from tenant_services.models import services
+from tenant_services.models import services, RentPayment, RentTransaction
 
 class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -61,4 +61,24 @@ class TransactionCheckSerializer(serializers.Serializer):
 class ServiceFeeAmountSerializer(serializers.ModelSerializer):
     class Meta:
         model = PropertyBlock
+        fields = '__all__'
+
+
+class PayRentSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    mobile_number = serializers.CharField(required=False, allow_blank=True)
+    pay_via = serializers.CharField()
+    month = serializers.IntegerField(min_value=1, max_value=12)
+    year = serializers.IntegerField()
+
+
+class RentPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RentPayment
+        fields = '__all__'
+
+
+class RentTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RentTransaction
         fields = '__all__'

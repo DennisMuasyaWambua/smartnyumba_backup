@@ -11,6 +11,7 @@ urlpatterns = [
     # path('delete-admin/', views.DeleteAdminAPIView.as_view(), name='delete-admin-api'),
 
     path('all-tenant-payments/', views.AllTenantPaymentsAPIView.as_view(), name='all-tenant-payments'),
+    path('platform-earnings/', views.PlatformEarningsAPIView.as_view(), name='platform-earnings'),
 
 ]
 
