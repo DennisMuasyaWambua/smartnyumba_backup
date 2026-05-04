@@ -20,5 +20,14 @@ urlpatterns = [
     #-----PROFILE--------#
     path('user-profile/', views.UserProfileAPIView.as_view(), name='user-profile'),
     path('admin-profile/', views.AdminProfileAPIView.as_view(), name='admin-profile'),
-    path("all-properties/", views.AllPropertiesAPIView.as_view(), name='all-properties-api') 
+    path("all-properties/", views.AllPropertiesAPIView.as_view(), name='all-properties-api'),
+
+    #-----ACTIVATION PAYMENT--------#
+    path('initiate-activation-payment/', views.InitiateActivationPaymentAPIView.as_view(), name='initiate-activation-payment'),
+    path('activation-mpesa-callback/', views.ActivationMpesaCallBackAPIView.as_view(), name='activation-mpesa-callback'),
+    path('check-activation-status/', views.CheckActivationStatusAPIView.as_view(), name='check-activation-status'),
+    path('landlord-login/', views.LandlordLoginAPIView.as_view(), name='landlord-login'),
+
+    #-----LANDLORD SUBORDINATES--------#
+    path('landlord-create-subordinate/', views.LandlordCreateSubordinateAPIView.as_view(), name='landlord-create-subordinate'),
 ]

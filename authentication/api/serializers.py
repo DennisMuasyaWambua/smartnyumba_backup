@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from authentication.models import Tenant, staffAdmin
+from authentication.models import Tenant, staffAdmin, ActivationPayment, ActivationTransaction
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -143,7 +143,39 @@ class AdminProfileSerializer(serializers.ModelSerializer):
 
 
 class AllProperiesSerializer(serializers.ModelSerializer):
-    
+
     class Meta:
         model = Property
         fields = ['location', 'block_number']
+
+
+# Activation payment serializers
+class InitiateActivationPaymentSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    mobile_number = serializers.CharField(required=False, allow_blank=True)
+
+
+class CheckActivationStatusSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class ActivationPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActivationPayment
+        fields = '__all__'
+
+
+class ActivationTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActivationTransaction
+        fields = '__all__'
+
+
+# Landlord subordinate creation serializer
+class LandlordCreateSubordinateSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=100)
+    last_name = serializers.CharField(max_length=100)
+    mobile_number = serializers.CharField(max_length=15)
+    id_number = serializers.CharField(max_length=8)
+    role = serializers.ChoiceField(choices=['accounts', 'caretaker'])
