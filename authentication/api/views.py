@@ -448,31 +448,23 @@ class UserRegisterAPIView(APIVIEW):
 
             # Check authentication requirement for non-tenant roles
             role_name = request.data.get('role', 'tenant')
-            if role_name != 'tenant':
+
+            # Landlords can self-register (for activation payment flow)
+            # But accounts/caretaker must be created by authenticated landlords
+            if role_name in ['accounts', 'caretaker']:
                 if not request.user.is_authenticated:
                     return Response({
                         'status': False,
                         'message': 'Authentication required for this role registration'
                     }, status=status.HTTP_401_UNAUTHORIZED)
 
-                # Only admins can register landlords, admins or landlords can register accounts/caretakers
+                # Only admins or landlords can create accounts/caretakers
                 current_user_role = request.user.role.short_name
-
-                if role_name == 'landlord':
-                    # Only admins can register landlords
-                    if current_user_role != 'admin':
-                        return Response({
-                            'status': False,
-                            'message': 'Only admins can register landlords'
-                        }, status=status.HTTP_403_FORBIDDEN)
-
-                elif role_name in ['accounts', 'caretaker']:
-                    # Admins OR landlords can create accounts/caretakers
-                    if current_user_role not in ['admin', 'landlord']:
-                        return Response({
-                            'status': False,
-                            'message': 'Only admins or landlords can create accountants/caretakers'
-                        }, status=status.HTTP_403_FORBIDDEN)
+                if current_user_role not in ['admin', 'landlord']:
+                    return Response({
+                        'status': False,
+                        'message': 'Only admins or landlords can create accountants/caretakers'
+                    }, status=status.HTTP_403_FORBIDDEN)
 
             with transaction.atomic():
                 email = request.data.get('email')
