@@ -76,9 +76,9 @@ jobs:
             --exclude='*' \
             ./ root@178.105.35.41:/opt/smartnyumba/
 
-      - name: Create .env file on VPS
+      - name: Create .env file locally
         run: |
-          ssh root@178.105.35.41 "cat > /opt/smartnyumba/.env << 'EOF'
+          cat > .env << 'EOF'
           # Docker Hub
           DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
 
@@ -133,7 +133,11 @@ jobs:
 
           # Platform Settings
           PLATFORM_COMMISSION_RATE=0.05
-          EOF"
+          EOF
+
+      - name: Copy .env file to VPS
+        run: |
+          scp .env root@178.105.35.41:/opt/smartnyumba/.env
 
       - name: Deploy with Docker Compose
         run: |
