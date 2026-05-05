@@ -1,0 +1,146 @@
+name: Deploy to Hetzner VPS
+
+on:
+  push:
+    branches:
+      - main  # Change this to your default branch if different
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/smartnyumba
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smartnyumba:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smartnyumba:buildcache,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H 178.105.35.41 >> ~/.ssh/known_hosts
+
+      - name: Create deployment directory
+        run: |
+          ssh root@178.105.35.41 "mkdir -p /opt/smartnyumba"
+
+      - name: Copy deployment files to VPS
+        run: |
+          rsync -avz \
+            --include='docker-compose.yml' \
+            --include='nginx.conf' \
+            --include='deploy.sh' \
+            --exclude='*' \
+            ./ root@178.105.35.41:/opt/smartnyumba/
+
+      - name: Create .env file on VPS
+        run: |
+          ssh root@178.105.35.41 "cat > /opt/smartnyumba/.env << 'EOF'
+          # Docker Hub
+          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+
+          # Django Settings
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          DEBUG=False
+          ENVIRONMENT=PRODUCTION
+          ALLOWED_HOSTS=178.105.35.41,api.smartnyumba.com,smartnyumba.com
+
+          # Database (Railway PostgreSQL)
+          MY_DATABASE_URL=postgresql://postgres:NrBvzlxjzBxcWFqOfaFYqUVTyiBLbSJZ@shuttle.proxy.rlwy.net:11362/railway
+          DATABASE_NAME=railway
+          DATABASE_USER=postgres
+          DATABASE_PASSWORD=NrBvzlxjzBxcWFqOfaFYqUVTyiBLbSJZ
+          DATABASE_HOST=shuttle.proxy.rlwy.net
+          DB_PORT=11362
+
+          # Email Settings
+          EMAIL_HOST=${{ secrets.EMAIL_HOST }}
+          EMAIL_HOST_USER=${{ secrets.EMAIL_HOST_USER }}
+          EMAIL_HOST_PASSWORD=${{ secrets.EMAIL_HOST_PASSWORD }}
+          DEFAULT_FROM_EMAIL=${{ secrets.DEFAULT_FROM_EMAIL }}
+          SERVER_EMAIL=${{ secrets.SERVER_EMAIL }}
+          EMAIL_USE_TLS=${{ secrets.EMAIL_USE_TLS }}
+          EMAIL_USE_SSL=${{ secrets.EMAIL_USE_SSL }}
+          EMAIL_PORT=${{ secrets.EMAIL_PORT }}
+
+          # Safaricom/M-Pesa Settings
+          SAFARICOM_AUTH_ENDPOINT=${{ secrets.SAFARICOM_AUTH_ENDPOINT }}
+          SAFARICOM_AUTH_KEY=${{ secrets.SAFARICOM_AUTH_KEY }}
+          SAFARICOM_AUTH_CONSUMER_SECRET=${{ secrets.SAFARICOM_AUTH_CONSUMER_SECRET }}
+          SAFARICOM_STK_PUSH=${{ secrets.SAFARICOM_STK_PUSH }}
+          SAFARICOM_PASS_KEY=${{ secrets.SAFARICOM_PASS_KEY }}
+          BUSINESS_SHORT_CODE=${{ secrets.BUSINESS_SHORT_CODE }}
+          TILLNUMBER=${{ secrets.TILLNUMBER }}
+
+          # B2C Settings
+          SAFARICOM_BC2_AUTH_KEY=${{ secrets.SAFARICOM_BC2_AUTH_KEY }}
+          SAFARICOM_B2C_CONSUMER_TIME=${{ secrets.SAFARICOM_B2C_CONSUMER_TIME }}
+          SAFARICOM_B2C_ENDPOINT=${{ secrets.SAFARICOM_B2C_ENDPOINT }}
+          SAFARICOM_B2C_INITIATOR_PASSWORD=${{ secrets.SAFARICOM_B2C_INITIATOR_PASSWORD }}
+          SAFARICOM_B2C_INITIATOR_NAME=${{ secrets.SAFARICOM_B2C_INITIATOR_NAME }}
+          SAFARICOM_B2C_QUEUETIMEOUTURL=${{ secrets.SAFARICOM_B2C_QUEUETIMEOUTURL }}
+          SAFARICOM_B2C_RESULTURL=${{ secrets.SAFARICOM_B2C_RESULTURL }}
+          SAFARICOM_B2C_PARTYA=${{ secrets.SAFARICOM_B2C_PARTYA }}
+          B2C_CER=${{ secrets.B2C_CER }}
+
+          # Stripe Settings
+          STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+          SUCCESS_URL=${{ secrets.SUCCESS_URL }}
+          CANCEL_URL=${{ secrets.CANCEL_URL }}
+
+          # Platform Settings
+          PLATFORM_COMMISSION_RATE=0.05
+          EOF"
+
+      - name: Deploy with Docker Compose
+        run: |
+          ssh root@178.105.35.41 "cd /opt/smartnyumba && export IMAGE_TAG=latest && bash deploy.sh"
+
+      - name: Deployment status
+        run: |
+          echo "Deployment completed successfully!"
+          echo "Application is running on http://178.105.35.41:8080"
+          echo "Docker image: ${{ secrets.DOCKERHUB_USERNAME }}/smartnyumba:latest"

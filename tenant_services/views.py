@@ -115,7 +115,7 @@ class PayServiceAPIView(APIView):
                 }
                 endpoint = settings.SAFARICOM_STK_PUSH
                 Business_short_code = settings.BUSINESS_SHORT_CODE
-                partyB = settings.TILL_NUMBER
+                partyB = settings.TILLNUMBER
                 timestamp = f"{datetime.datetime.now():%Y%m%d%H%M%S}"
                 pass_key = settings.SAFARICOM_PASS_KEY
                 message = f'{Business_short_code}{pass_key}{timestamp}'
@@ -581,7 +581,7 @@ class PayRentAPIView(APIView):
                 }
                 endpoint = settings.SAFARICOM_STK_PUSH
                 Business_short_code = settings.BUSINESS_SHORT_CODE
-                partyB = settings.TILL_NUMBER
+                partyB = settings.TILLNUMBER
                 timestamp = f"{datetime.datetime.now():%Y%m%d%H%M%S}"
                 pass_key = settings.SAFARICOM_PASS_KEY
                 message = f'{Business_short_code}{pass_key}{timestamp}'
