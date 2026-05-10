@@ -38,6 +38,11 @@ class serviceTransactions(models.Model):
     landlord_payout_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     platform_earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
+    # Pesapal-specific fields
+    payment_method = models.CharField(max_length=20, null=True, blank=True)
+    confirmation_code = models.CharField(max_length=100, null=True, blank=True)
+    pesapal_response = models.TextField(null=True, blank=True)
+
     class Meta:
         db_table = 'services_transactions'
         verbose_name_plural = 'services_transactions'
@@ -77,6 +82,11 @@ class RentTransaction(models.Model):
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     landlord_payout_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     platform_earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Pesapal-specific fields
+    payment_method = models.CharField(max_length=20, null=True, blank=True)
+    confirmation_code = models.CharField(max_length=100, null=True, blank=True)
+    pesapal_response = models.TextField(null=True, blank=True)
 
     class Meta:
         db_table = 'rent_transactions'

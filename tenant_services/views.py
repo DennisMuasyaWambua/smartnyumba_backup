@@ -19,10 +19,12 @@ from utils.api_auth import encrypt_initiator_password_with_certificate_file, get
 
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.utils import timezone
 
 import stripe
 
 from utils.genRef import generate_B2c_account_reference
+from utils import pesapal_service
 
 User = get_user_model()
 
@@ -208,6 +210,102 @@ class PayServiceAPIView(APIView):
                     'id': checkout_session.id,
                     'url': checkout_session.url
                 }, status=status.HTTP_200_OK)
+
+            # Pesapal Payment Logic
+            elif pay_via == 'pesapal':
+                try:
+                    # Create or get existing service instance
+                    service_instance, created = services.objects.get_or_create(
+                        user=user,
+                        defaults={
+                            'block': tenant.PropertyBlock.block,
+                            'service_name': service_name,
+                            'amount': service_charge,
+                            'balance_service_charge': annual_service_charge - service_charge,
+                            'payment_mode': pay_via
+                        }
+                    )
+
+                    if not created:
+                        service_instance.balance_service_charge -= service_charge
+                        service_instance.save()
+
+                    # Check for existing pending transaction to avoid duplicates
+                    existing_transaction = serviceTransactions.objects.filter(
+                        service_instance=service_instance,
+                        status=0,
+                        MerchantRequestID__isnull=True
+                    ).first()
+
+                    if existing_transaction:
+                        service_transaction = existing_transaction
+                    else:
+                        # Create new transaction record
+                        service_transaction = serviceTransactions.objects.create(
+                            service_instance=service_instance,
+                            status=0,  # Pending
+                            payment_method='pesapal'
+                        )
+
+                    # Build merchant reference
+                    merchant_reference = f"SERVICE-{service_transaction.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
+
+                    # Build callback URL (IPN endpoint)
+                    callback_url = request.build_absolute_uri('/apps/api/v1/tenant-services/pesapal/ipn/')
+
+                    # Build billing address
+                    billing_address = {
+                        "phone_number": mobile_number or user.mobile_number,
+                        "email_address": email,
+                        "country_code": "KE",
+                        "first_name": user.first_name or "Tenant",
+                        "middle_name": "",
+                        "last_name": user.last_name or "",
+                        "line_1": "",
+                        "line_2": "",
+                        "city": "",
+                        "state": "",
+                        "postal_code": "",
+                        "zip_code": ""
+                    }
+
+                    # Build description
+                    payment_description = f"Service charge for {user.get_full_name() or user.email}"
+
+                    # Submit order to Pesapal
+                    pesapal_response = pesapal_service.submit_order(
+                        merchant_reference=merchant_reference,
+                        amount=service_charge,
+                        description=payment_description,
+                        callback_url=callback_url,
+                        currency='KES',
+                        billing_address=billing_address
+                    )
+
+                    # Update transaction with order tracking ID
+                    service_transaction.MerchantRequestID = pesapal_response['order_tracking_id']
+                    service_transaction.pesapal_response = json.dumps(pesapal_response)
+                    service_transaction.save()
+
+                    return Response({
+                        'status': True,
+                        'message': 'Please complete payment in the checkout page',
+                        'redirect_url': pesapal_response['redirect_url'],
+                        'order_tracking_id': pesapal_response['order_tracking_id'],
+                        'transaction_id': service_transaction.id
+                    }, status=status.HTTP_200_OK)
+
+                except pesapal_service.PesapalException as e:
+                    return Response({
+                        'status': False,
+                        'message': f'Payment gateway error: {str(e)}'
+                    }, status=status.HTTP_502_BAD_GATEWAY)
+
+            else:
+                return Response({
+                    'status': False,
+                    'message': f'Unsupported payment method: {pay_via}'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             print(str(e))
@@ -654,6 +752,87 @@ class PayRentAPIView(APIView):
                     'url': checkout_session.url
                 }, status=status.HTTP_200_OK)
 
+            # Pesapal Payment Logic
+            elif pay_via == 'pesapal':
+                try:
+                    # Check for existing pending transaction to avoid duplicates
+                    existing_transaction = RentTransaction.objects.filter(
+                        rent_payment=rent_payment,
+                        status=0,
+                        MerchantRequestID__isnull=True
+                    ).first()
+
+                    if existing_transaction:
+                        rent_transaction = existing_transaction
+                    else:
+                        # Create new transaction record
+                        rent_transaction = RentTransaction.objects.create(
+                            rent_payment=rent_payment,
+                            status=0,  # Pending
+                            payment_method='pesapal'
+                        )
+
+                    # Build merchant reference
+                    merchant_reference = f"RENT-{rent_transaction.id}-{month}-{year}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
+
+                    # Build callback URL (IPN endpoint)
+                    callback_url = request.build_absolute_uri('/apps/api/v1/tenant-services/pesapal/ipn/')
+
+                    # Build billing address
+                    billing_address = {
+                        "phone_number": mobile_number or user.mobile_number,
+                        "email_address": email,
+                        "country_code": "KE",
+                        "first_name": user.first_name or "Tenant",
+                        "middle_name": "",
+                        "last_name": user.last_name or "",
+                        "line_1": "",
+                        "line_2": "",
+                        "city": "",
+                        "state": "",
+                        "postal_code": "",
+                        "zip_code": ""
+                    }
+
+                    # Build description
+                    payment_description = f"Rent payment for {user.get_full_name() or user.email}, {month}/{year}"
+
+                    # Submit order to Pesapal
+                    pesapal_response = pesapal_service.submit_order(
+                        merchant_reference=merchant_reference,
+                        amount=rent_amount,
+                        description=payment_description,
+                        callback_url=callback_url,
+                        currency='KES',
+                        billing_address=billing_address
+                    )
+
+                    # Update transaction with order tracking ID
+                    rent_transaction.MerchantRequestID = pesapal_response['order_tracking_id']
+                    rent_transaction.pesapal_response = json.dumps(pesapal_response)
+                    rent_transaction.save()
+
+                    return Response({
+                        'status': True,
+                        'message': 'Please complete payment in the checkout page',
+                        'redirect_url': pesapal_response['redirect_url'],
+                        'order_tracking_id': pesapal_response['order_tracking_id'],
+                        'transaction_id': rent_transaction.id,
+                        'MerchantRequestID': pesapal_response['order_tracking_id']
+                    }, status=status.HTTP_200_OK)
+
+                except pesapal_service.PesapalException as e:
+                    return Response({
+                        'status': False,
+                        'message': f'Payment gateway error: {str(e)}'
+                    }, status=status.HTTP_502_BAD_GATEWAY)
+
+            else:
+                return Response({
+                    'status': False,
+                    'message': f'Unsupported payment method: {pay_via}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
         except Exception as e:
             print(f"Rent payment error: {str(e)}")
             return Response({
@@ -811,3 +990,302 @@ class AllRentTransactionsAPIView(APIView):
                 'status': False,
                 'message': 'Could not retrieve rent transactions'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PesapalIPNView(APIView):
+    """
+    Handle Pesapal IPN (Instant Payment Notification) callbacks.
+
+    Pesapal sends IPN notifications when transaction status changes.
+    This endpoint processes the notification and updates transaction status.
+
+    Note: This endpoint should be publicly accessible (no authentication required)
+    and must be HTTPS in production.
+    """
+    permission_classes = []  # No authentication for IPN callbacks
+
+    def post(self, request):
+        """Handle POST IPN callbacks from Pesapal"""
+        return self._process_ipn(request)
+
+    def get(self, request):
+        """Handle GET IPN callbacks from Pesapal"""
+        return self._process_ipn(request)
+
+    def _process_ipn(self, request):
+        """
+        Process IPN notification from Pesapal.
+
+        Pesapal may send order_tracking_id in:
+        - POST body (JSON or form data)
+        - GET query parameters
+        - Headers
+        """
+        try:
+            # Extract order_tracking_id from various possible sources
+            order_tracking_id = None
+
+            # Try POST JSON body
+            if request.content_type == 'application/json' and request.body:
+                try:
+                    data = json.loads(request.body)
+                    order_tracking_id = data.get('OrderTrackingId') or data.get('order_tracking_id')
+                except json.JSONDecodeError:
+                    pass
+
+            # Try POST form data
+            if not order_tracking_id:
+                order_tracking_id = request.POST.get('OrderTrackingId') or request.POST.get('order_tracking_id')
+
+            # Try GET query parameters
+            if not order_tracking_id:
+                order_tracking_id = request.GET.get('OrderTrackingId') or request.GET.get('order_tracking_id')
+
+            if not order_tracking_id:
+                print(f"IPN received without order_tracking_id. Data: {request.data}, Query: {request.GET}")
+                return Response(
+                    {"error": "Missing order_tracking_id"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            print(f"Processing Pesapal IPN for order_tracking_id: {order_tracking_id}")
+
+            # Query Pesapal for authoritative transaction status
+            transaction_status = pesapal_service.get_transaction_status(order_tracking_id)
+
+            print(f"Transaction status from Pesapal: {transaction_status['status']}")
+
+            # Find corresponding transaction in database
+            # Try RentTransaction first, then serviceTransactions
+            transaction = None
+            transaction_type = None
+
+            rent_transaction = RentTransaction.objects.filter(
+                MerchantRequestID=order_tracking_id
+            ).first()
+
+            if rent_transaction:
+                transaction = rent_transaction
+                transaction_type = 'rent'
+            else:
+                service_transaction = serviceTransactions.objects.filter(
+                    MerchantRequestID=order_tracking_id
+                ).first()
+                if service_transaction:
+                    transaction = service_transaction
+                    transaction_type = 'service'
+
+            if not transaction:
+                print(f"No transaction found for order_tracking_id: {order_tracking_id}")
+                return Response(
+                    {"error": "Transaction not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Update transaction based on status
+            pesapal_status = transaction_status['status']
+
+            # Idempotency check - if already processed, return success
+            if transaction.status == 1 and pesapal_status == 'COMPLETED':
+                print(f"Transaction {transaction.id} already marked as completed. Idempotent IPN.")
+                return Response({"status": "ok", "message": "Already processed"}, status=status.HTTP_200_OK)
+
+            if pesapal_status == 'COMPLETED':
+                # Payment successful
+                transaction.status = 1  # Completed/Paid
+                transaction.confirmation_code = transaction_status.get('confirmation_code', '')
+                transaction.pesapal_response = json.dumps(transaction_status['raw_response'])
+                transaction.payment_method = transaction_status.get('payment_method', 'pesapal')
+                transaction.save()
+
+                print(f"{transaction_type.capitalize()} transaction {transaction.id} marked as COMPLETED. Confirmation: {transaction.confirmation_code}")
+
+                # Update parent payment status
+                if transaction_type == 'rent' and transaction.rent_payment:
+                    transaction.rent_payment.status = 1
+                    transaction.rent_payment.save()
+                    print(f"Rent payment {transaction.rent_payment.id} marked as completed")
+                elif transaction_type == 'service' and transaction.service_instance:
+                    transaction.service_instance.status = 1
+                    transaction.service_instance.save()
+                    print(f"Service {transaction.service_instance.id} marked as completed")
+
+                # Calculate and save commission
+                from utils.commission import calculate_commission
+                if transaction_type == 'rent':
+                    original_amount = transaction.rent_payment.rent_amount
+                elif transaction_type == 'service':
+                    original_amount = transaction.service_instance.amount
+                else:
+                    original_amount = Decimal('0')
+
+                commission_data = calculate_commission(original_amount)
+                transaction.commission_amount = commission_data['commission_amount']
+                transaction.landlord_payout_amount = commission_data['landlord_payout']
+                transaction.platform_earnings = commission_data['platform_earnings']
+                transaction.save()
+
+                print(f"Commission calculated: {commission_data['commission_amount']}, Landlord payout: {commission_data['landlord_payout']}")
+
+            elif pesapal_status in ['FAILED', 'CANCELLED']:
+                # Payment failed or cancelled
+                transaction.status = 2  # Failed (or use appropriate status code)
+                transaction.pesapal_response = json.dumps(transaction_status['raw_response'])
+                transaction.save()
+
+                print(f"Transaction {transaction.id} marked as {pesapal_status}")
+
+            else:
+                # Status still pending or unknown
+                print(f"Transaction {transaction.id} status: {pesapal_status} (no update)")
+
+            # Return 200 OK to Pesapal to acknowledge receipt
+            return Response(
+                {"status": "ok", "message": "IPN processed successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        except pesapal_service.PesapalException as e:
+            print(f"Pesapal IPN processing error: {str(e)}")
+            return Response(
+                {"error": "Failed to process IPN"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            print(f"IPN processing error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"error": "Failed to process IPN"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class CheckPaymentStatusAPIView(APIView):
+    """
+    Check payment status for a transaction.
+
+    Supports lookup by internal transaction_id or order_tracking_id.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """
+        Check payment status.
+
+        Expected payload:
+        {
+            "transaction_id": int (optional),
+            "order_tracking_id": string (optional),
+            "transaction_type": "rent" | "service"
+        }
+        """
+        try:
+            transaction_id = request.data.get('transaction_id')
+            order_tracking_id = request.data.get('order_tracking_id')
+            transaction_type = request.data.get('transaction_type', 'rent')
+
+            if not transaction_id and not order_tracking_id:
+                return Response(
+                    {"error": "Either transaction_id or order_tracking_id is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Find transaction
+            transaction = None
+            if transaction_type == 'rent':
+                if transaction_id:
+                    transaction = RentTransaction.objects.filter(id=transaction_id).first()
+                elif order_tracking_id:
+                    transaction = RentTransaction.objects.filter(MerchantRequestID=order_tracking_id).first()
+            else:  # service
+                if transaction_id:
+                    transaction = serviceTransactions.objects.filter(id=transaction_id).first()
+                elif order_tracking_id:
+                    transaction = serviceTransactions.objects.filter(MerchantRequestID=order_tracking_id).first()
+
+            if not transaction:
+                return Response(
+                    {"error": "Transaction not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # If transaction is pending and has order_tracking_id, query Pesapal
+            if transaction.status == 0 and transaction.MerchantRequestID and transaction.payment_method == 'pesapal':
+                try:
+                    pesapal_status = pesapal_service.get_transaction_status(transaction.MerchantRequestID)
+
+                    # Update transaction if status changed
+                    if pesapal_status['status'] == 'COMPLETED' and transaction.status != 1:
+                        transaction.status = 1
+                        transaction.confirmation_code = pesapal_status.get('confirmation_code', '')
+                        transaction.pesapal_response = json.dumps(pesapal_status['raw_response'])
+                        transaction.save()
+
+                        # Update parent payment status
+                        if transaction_type == 'rent' and transaction.rent_payment:
+                            transaction.rent_payment.status = 1
+                            transaction.rent_payment.save()
+                        elif transaction_type == 'service' and transaction.service_instance:
+                            transaction.service_instance.status = 1
+                            transaction.service_instance.save()
+
+                        # Calculate commission
+                        from utils.commission import calculate_commission
+                        if transaction_type == 'rent':
+                            original_amount = transaction.rent_payment.rent_amount
+                        else:
+                            original_amount = transaction.service_instance.amount
+
+                        commission_data = calculate_commission(original_amount)
+                        transaction.commission_amount = commission_data['commission_amount']
+                        transaction.landlord_payout_amount = commission_data['landlord_payout']
+                        transaction.platform_earnings = commission_data['platform_earnings']
+                        transaction.save()
+
+                        print(f"Transaction {transaction.id} updated to COMPLETED via status check")
+
+                except pesapal_service.PesapalException as e:
+                    print(f"Failed to check Pesapal status: {str(e)}")
+
+            # Return current transaction status
+            response_data = {
+                "transaction_id": transaction.id,
+                "status": transaction.status,
+                "status_text": self._get_status_text(transaction.status),
+                "payment_method": transaction.payment_method if hasattr(transaction, 'payment_method') else "unknown",
+                "confirmation_code": transaction.confirmation_code if hasattr(transaction, 'confirmation_code') else ""
+            }
+
+            # Add type-specific data
+            if transaction_type == 'rent' and transaction.rent_payment:
+                response_data.update({
+                    "amount": str(transaction.rent_payment.rent_amount),
+                    "month": transaction.rent_payment.month,
+                    "year": transaction.rent_payment.year
+                })
+            elif transaction_type == 'service' and transaction.service_instance:
+                response_data.update({
+                    "amount": str(transaction.service_instance.amount),
+                    "service_name": transaction.service_instance.service_name
+                })
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"CheckPaymentStatusAPIView error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"error": "Failed to check payment status"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _get_status_text(self, status_code):
+        """Convert status code to human-readable text"""
+        status_map = {
+            0: "Pending",
+            1: "Completed",
+            2: "Failed"
+        }
+        return status_map.get(status_code, "Unknown")
