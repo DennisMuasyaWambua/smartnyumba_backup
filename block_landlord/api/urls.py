@@ -18,5 +18,8 @@ urlpatterns = [
     path('block-landlord-new-password/', views.NewPasswordPasswordBlockLandlordAPIView.as_view(), name='new-password-api'),
 
     #---------------------All Tenants -------------------------------------------
-    path('view-all-tenats/', views.AllTenantsAPIView.as_view(), name='view-all-tenants')
+    path('view-all-tenats/', views.AllTenantsAPIView.as_view(), name='view-all-tenants'),
+
+    #---------------------Financial Dashboard -----------------------------------
+    path('financial-summary/', views.LandlordFinancialSummaryAPIView.as_view(), name='landlord-financial-summary'),
 ]

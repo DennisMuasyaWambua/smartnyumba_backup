@@ -1,5 +1,6 @@
 import random
 import re
+import calendar
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
@@ -15,6 +16,12 @@ from staff_accounts.models import staffAccounts
 
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
+from django.db.models import Sum, Count, Q
+from decimal import Decimal
+from datetime import datetime
+
+from tenant_services.models import RentTransaction, serviceTransactions, RentPayment, services
+from properties.models import PropertyBlock
 
 User = get_user_model()
 
@@ -112,9 +119,9 @@ class CreateBlockLandlordAPIView(APIView):
 
             send_creation_email(email=email, password=password)
             approver_email = approver
-            
+
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+            OtpVerificationCode.objects.create(email=user.email, otp=str(otp), validated=False)
             
             email_response = approve_accounts_profile(email=approver_email,otp=otp, accounts_email=email)
             
@@ -696,10 +703,10 @@ class ForgotPasswordBlockLandlordAPIView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
                 
             user = user.first()
-            
+
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
-            email_response = send_forgot_password_otp(email=user,otp=otp)
+            OtpVerificationCode.objects.create(email=user.email, otp=str(otp), validated=False)
+            email_response = send_forgot_password_otp(email=user.email, otp=otp)
             
             
             if not email_response:
@@ -764,7 +771,7 @@ class VerifyChangePasswordBlockLandlordAPIView(APIView):
                 })
             
             verify_otp = OtpVerificationCode.objects.filter(
-                    email=user, validated=False)
+                    email=user.email, validated=False)
             if not verify_otp.exists():
                 return Response({
                     'status': False,
@@ -826,21 +833,21 @@ class ResendOtpPasswordBlockLandlordAPIView(APIView):
                 'message': 'User with this email does not exist.'
             }, status=status.HTTP_400_BAD_REQUEST)
         user = user.first()
-        
-        verify_otp = OtpVerificationCode.objects.filter(email=user, validated=False)
+
+        verify_otp = OtpVerificationCode.objects.filter(email=user.email, validated=False)
         if not verify_otp.exists():
             return Response({
                 'status': False,
                 'message': 'OTP does not exist.'
             }, status=status.HTTP_404_NOT_FOUND)
-        
+
         verify_otp = verify_otp.last()
         print(verify_otp)
         verify_otp.delete()
 
         otp = random.randint(1111, 9999)
-        OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
-        email_response = send_forgot_password_otp(email=user,otp=otp)
+        OtpVerificationCode.objects.create(email=user.email, otp=str(otp), validated=False)
+        email_response = send_forgot_password_otp(email=user.email, otp=otp)
         
         
         if not email_response:
@@ -963,3 +970,572 @@ class AllTenantsAPIView(APIView):
                 'status': False,
                 'message': 'Could not view the tenant list'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LandlordTenantManagementAPIView(APIView):
+    """
+    Tenant Management API for landlords
+    Returns list of all tenants with payment status and property information
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+
+            # Verify user is a landlord
+            if user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords can access tenant data'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get landlord profile
+            landlord = BlockLandlord.objects.filter(user=user).first()
+            if not landlord:
+                return Response({
+                    'status': False,
+                    'message': 'Landlord profile not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Get all landlord's properties
+            landlord_properties = landlord.property.all()
+            property_ids = [prop.id for prop in landlord_properties]
+
+            # Get all property blocks for these properties
+            property_blocks = PropertyBlock.objects.filter(block_id__in=property_ids)
+            block_ids = [block.id for block in property_blocks]
+
+            # Get filters from query params
+            property_filter = request.GET.get('property_id')
+            payment_status = request.GET.get('payment_status')  # 'paid', 'pending'
+
+            # Build filter for tenants
+            tenant_filter = Q(PropertyBlock_id__in=block_ids)
+            if property_filter:
+                blocks_for_property = PropertyBlock.objects.filter(block_id=property_filter)
+                tenant_filter = Q(PropertyBlock_id__in=[b.id for b in blocks_for_property])
+
+            # Get all tenants
+            from tenant_services.models import RentPayment
+            tenants = Tenant.objects.filter(tenant_filter).select_related('user', 'PropertyBlock')
+
+            tenant_list = []
+            current_month = datetime.now().month
+            current_year = datetime.now().year
+
+            for tenant in tenants:
+                # Get latest rent payment status
+                latest_payment = RentPayment.objects.filter(
+                    user=tenant.user,
+                    month=current_month,
+                    year=current_year
+                ).first()
+
+                has_paid = latest_payment is not None
+
+                # Apply payment status filter
+                if payment_status == 'paid' and not has_paid:
+                    continue
+                if payment_status == 'pending' and has_paid:
+                    continue
+
+                # Get property block info
+                property_block = tenant.PropertyBlock
+                property_info = property_block.block if property_block else None
+
+                tenant_data = {
+                    'id': tenant.id,
+                    'email': tenant.user.email if tenant.user else 'N/A',
+                    'first_name': tenant.user.firstName if tenant.user else '',
+                    'last_name': tenant.user.lastName if tenant.user else '',
+                    'mobile_number': tenant.user.mobile_number if tenant.user else '',
+                    'house_number': property_block.house_number if property_block else 'N/A',
+                    'block_number': property_info.block_number if property_info else 'N/A',
+                    'location': property_info.location if property_info else 'N/A',
+                    'rent_amount': float(property_block.rent_charged) if property_block and property_block.rent_charged else 0.0,
+                    'service_charge': float(property_block.service_charge) if property_block and property_block.service_charge else 0.0,
+                    'payment_status': 'paid' if has_paid else 'pending',
+                    'last_payment_date': latest_payment.rent_transaction.last().date_paid.strftime('%Y-%m-%d') if has_paid and latest_payment.rent_transaction.exists() else None,
+                }
+                tenant_list.append(tenant_data)
+
+            # Statistics
+            total_tenants = len(tenant_list)
+            paid_count = sum(1 for t in tenant_list if t['payment_status'] == 'paid')
+            pending_count = total_tenants - paid_count
+
+            response_data = {
+                'status': True,
+                'data': {
+                    'tenants': tenant_list,
+                    'statistics': {
+                        'total_tenants': total_tenants,
+                        'paid_count': paid_count,
+                        'pending_count': pending_count,
+                    },
+                    'properties': [
+                        {
+                            'id': prop.id,
+                            'block_number': prop.block_number,
+                            'location': prop.location,
+                        }
+                        for prop in landlord_properties
+                    ]
+                }
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': False,
+                'message': f'Error fetching tenant data: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class LandlordTransactionReportsAPIView(APIView):
+    """
+    Transaction Reports API for landlords
+    Returns filterable transaction history
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+
+            # Verify user is a landlord
+            if user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords can access transaction reports'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get landlord profile
+            landlord = BlockLandlord.objects.filter(user=user).first()
+            if not landlord:
+                return Response({
+                    'status': False,
+                    'message': 'Landlord profile not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Get all landlord's properties
+            landlord_properties = landlord.property.all()
+            property_ids = [prop.id for prop in landlord_properties]
+
+            # Get all property blocks
+            property_blocks = PropertyBlock.objects.filter(block_id__in=property_ids)
+            block_ids = [block.id for block in property_blocks]
+
+            # Get filters from query params
+            start_date = request.GET.get('start_date')
+            end_date = request.GET.get('end_date')
+            property_filter = request.GET.get('property_id')
+            transaction_type = request.GET.get('type')  # 'rent', 'service', 'all'
+
+            # Build filters
+            rent_filter = Q(rent_payment__property_block_id__in=block_ids, status=1)
+            service_filter = Q(service_instance__block_id__in=property_ids, status=1)
+
+            if start_date and end_date:
+                rent_filter &= Q(date_paid__range=[start_date, end_date])
+                service_filter &= Q(date_paid__range=[start_date, end_date])
+
+            if property_filter:
+                blocks_for_property = PropertyBlock.objects.filter(block_id=property_filter)
+                property_block_ids = [b.id for b in blocks_for_property]
+                rent_filter = Q(rent_payment__property_block_id__in=property_block_ids, status=1)
+                service_filter = Q(service_instance__block_id=property_filter, status=1)
+
+            # Get transactions
+            transactions = []
+
+            if transaction_type in ['rent', 'all', None]:
+                rent_transactions = RentTransaction.objects.filter(rent_filter).select_related(
+                    'rent_payment', 'rent_payment__user', 'rent_payment__property_block'
+                ).order_by('-date_paid')
+
+                for trans in rent_transactions:
+                    transactions.append({
+                        'id': trans.id,
+                        'type': 'rent',
+                        'amount': float(trans.rent_payment.rent_amount),
+                        'commission': float(trans.commission_amount),
+                        'payout': float(trans.landlord_payout_amount),
+                        'tenant_email': trans.rent_payment.user.email if trans.rent_payment.user else 'N/A',
+                        'payment_method': trans.payment_method or 'mpesa',
+                        'date': trans.date_paid.strftime('%Y-%m-%d %H:%M:%S'),
+                        'month': trans.rent_payment.month,
+                        'year': trans.rent_payment.year,
+                        'house_number': trans.rent_payment.property_block.house_number if trans.rent_payment.property_block else 'N/A',
+                        'confirmation_code': trans.confirmation_code or 'N/A',
+                    })
+
+            if transaction_type in ['service', 'all', None]:
+                service_transactions = serviceTransactions.objects.filter(service_filter).select_related(
+                    'service_instance', 'service_instance__user', 'service_instance__block'
+                ).order_by('-date_paid')
+
+                for trans in service_transactions:
+                    transactions.append({
+                        'id': trans.id,
+                        'type': 'service',
+                        'amount': float(trans.service_instance.amount),
+                        'commission': float(trans.commission_amount),
+                        'payout': float(trans.landlord_payout_amount),
+                        'tenant_email': trans.service_instance.user.email if trans.service_instance.user else 'N/A',
+                        'payment_method': trans.payment_method or 'mpesa',
+                        'date': trans.date_paid.strftime('%Y-%m-%d %H:%M:%S'),
+                        'service_name': trans.service_instance.service_name,
+                        'confirmation_code': trans.confirmation_code or 'N/A',
+                    })
+
+            # Sort by date
+            transactions.sort(key=lambda x: x['date'], reverse=True)
+
+            # Calculate totals
+            total_amount = sum(t['amount'] for t in transactions)
+            total_commission = sum(t['commission'] for t in transactions)
+            total_payout = sum(t['payout'] for t in transactions)
+
+            response_data = {
+                'status': True,
+                'data': {
+                    'transactions': transactions,
+                    'summary': {
+                        'total_transactions': len(transactions),
+                        'total_amount': float(total_amount),
+                        'total_commission': float(total_commission),
+                        'total_payout': float(total_payout),
+                    }
+                }
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': False,
+                'message': f'Error fetching transaction reports: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class LandlordPropertyDetailsAPIView(APIView):
+    """
+    Property Details API for landlords
+    Returns detailed metrics for a specific property
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, property_id):
+        try:
+            user = request.user
+
+            # Verify user is a landlord
+            if user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords can access property details'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get landlord profile
+            landlord = BlockLandlord.objects.filter(user=user).first()
+            if not landlord:
+                return Response({
+                    'status': False,
+                    'message': 'Landlord profile not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Verify property belongs to landlord
+            from properties.models import Property
+            property_obj = Property.objects.filter(id=property_id).first()
+            if not property_obj or property_obj not in landlord.property.all():
+                return Response({
+                    'status': False,
+                    'message': 'Property not found or does not belong to you'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Get property blocks
+            property_blocks = PropertyBlock.objects.filter(block=property_obj)
+            block_ids = [block.id for block in property_blocks]
+
+            # Get tenants
+            tenants = Tenant.objects.filter(PropertyBlock_id__in=block_ids)
+            total_units = property_blocks.count()
+            occupied_units = tenants.count()
+            vacancy_rate = ((total_units - occupied_units) / total_units * 100) if total_units > 0 else 0
+
+            # Get revenue data
+            rent_revenue = RentTransaction.objects.filter(
+                rent_payment__property_block_id__in=block_ids,
+                status=1
+            ).aggregate(total=Sum('rent_payment__rent_amount'))['total'] or Decimal('0')
+
+            service_revenue = serviceTransactions.objects.filter(
+                service_instance__block=property_obj,
+                status=1
+            ).aggregate(total=Sum('service_instance__amount'))['total'] or Decimal('0')
+
+            # Get tenant list with payment status
+            current_month = datetime.now().month
+            current_year = datetime.now().year
+            tenant_list = []
+
+            for tenant in tenants:
+                latest_payment = RentPayment.objects.filter(
+                    user=tenant.user,
+                    month=current_month,
+                    year=current_year
+                ).first()
+
+                property_block = tenant.PropertyBlock
+                tenant_list.append({
+                    'id': tenant.id,
+                    'email': tenant.user.email if tenant.user else 'N/A',
+                    'first_name': tenant.user.firstName if tenant.user else '',
+                    'last_name': tenant.user.lastName if tenant.user else '',
+                    'house_number': property_block.house_number if property_block else 'N/A',
+                    'rent_amount': float(property_block.rent_charged) if property_block and property_block.rent_charged else 0.0,
+                    'payment_status': 'paid' if latest_payment else 'pending',
+                })
+
+            response_data = {
+                'status': True,
+                'data': {
+                    'property': {
+                        'id': property_obj.id,
+                        'block_number': property_obj.block_number,
+                        'location': property_obj.location,
+                        'total_units': total_units,
+                        'occupied_units': occupied_units,
+                        'vacant_units': total_units - occupied_units,
+                        'occupancy_rate': round(100 - vacancy_rate, 2),
+                    },
+                    'revenue': {
+                        'total_revenue': float(rent_revenue + service_revenue),
+                        'rent_revenue': float(rent_revenue),
+                        'service_revenue': float(service_revenue),
+                    },
+                    'tenants': tenant_list,
+                }
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': False,
+                'message': f'Error fetching property details: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class LandlordFinancialSummaryAPIView(APIView):
+    """
+    Financial Dashboard API for landlords
+    Returns comprehensive financial metrics including revenue, commissions, and trends
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+
+            # Verify user is a landlord
+            if user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords can access financial data'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get landlord profile
+            landlord = BlockLandlord.objects.filter(user=user).first()
+            if not landlord:
+                return Response({
+                    'status': False,
+                    'message': 'Landlord profile not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Get all landlord's properties
+            landlord_properties = landlord.property.all()
+            property_ids = [prop.id for prop in landlord_properties]
+
+            # Get all property blocks for these properties
+            property_blocks = PropertyBlock.objects.filter(block_id__in=property_ids)
+            block_ids = [block.id for block in property_blocks]
+
+            # Get time filters from query params
+            period = request.GET.get('period', 'all')  # all, month, year
+            year = request.GET.get('year', datetime.now().year)
+            month = request.GET.get('month', datetime.now().month)
+
+            # Build filter for transactions
+            rent_filter = Q(rent_payment__property_block_id__in=block_ids, status=1)
+            service_filter = Q(service_instance__block_id__in=property_ids, status=1)
+
+            if period == 'month':
+                rent_filter &= Q(rent_payment__month=month, rent_payment__year=year)
+                service_filter &= Q(date_paid__month=month, date_paid__year=year)
+            elif period == 'year':
+                rent_filter &= Q(rent_payment__year=year)
+                service_filter &= Q(date_paid__year=year)
+
+            # RENT REVENUE
+            rent_data = RentTransaction.objects.filter(rent_filter).aggregate(
+                total_rent=Sum('rent_payment__rent_amount'),
+                total_rent_commission=Sum('commission_amount'),
+                total_rent_payout=Sum('landlord_payout_amount'),
+                rent_count=Count('id')
+            )
+
+            # SERVICE CHARGE REVENUE
+            service_data = serviceTransactions.objects.filter(service_filter).aggregate(
+                total_service=Sum('service_instance__amount'),
+                total_service_commission=Sum('commission_amount'),
+                total_service_payout=Sum('landlord_payout_amount'),
+                service_count=Count('id')
+            )
+
+            # Calculate totals
+            total_revenue = (rent_data['total_rent'] or Decimal('0')) + (service_data['total_service'] or Decimal('0'))
+            total_commission = (rent_data['total_rent_commission'] or Decimal('0')) + (service_data['total_service_commission'] or Decimal('0'))
+            total_landlord_payout = (rent_data['total_rent_payout'] or Decimal('0')) + (service_data['total_service_payout'] or Decimal('0'))
+
+            # Get monthly trends for the current year
+            monthly_trends = []
+            current_year = int(year)
+            for m in range(1, 13):
+                month_rent = RentTransaction.objects.filter(
+                    rent_payment__property_block_id__in=block_ids,
+                    rent_payment__month=m,
+                    rent_payment__year=current_year,
+                    status=1
+                ).aggregate(total=Sum('rent_payment__rent_amount'))['total'] or Decimal('0')
+
+                month_service = serviceTransactions.objects.filter(
+                    service_instance__block_id__in=property_ids,
+                    date_paid__month=m,
+                    date_paid__year=current_year,
+                    status=1
+                ).aggregate(total=Sum('service_instance__amount'))['total'] or Decimal('0')
+
+                monthly_trends.append({
+                    'month': m,
+                    'month_name': calendar.month_abbr[m],
+                    'rent': float(month_rent),
+                    'service': float(month_service),
+                    'total': float(month_rent + month_service)
+                })
+
+            # Get recent transactions (last 10)
+            recent_rent_transactions = RentTransaction.objects.filter(
+                rent_payment__property_block_id__in=block_ids,
+                status=1
+            ).select_related('rent_payment', 'rent_payment__user').order_by('-date_paid')[:10]
+
+            recent_service_transactions = serviceTransactions.objects.filter(
+                service_instance__block_id__in=property_ids,
+                status=1
+            ).select_related('service_instance', 'service_instance__user').order_by('-date_paid')[:10]
+
+            # Format recent transactions
+            recent_transactions = []
+
+            for trans in recent_rent_transactions:
+                recent_transactions.append({
+                    'id': trans.id,
+                    'type': 'rent',
+                    'amount': float(trans.rent_payment.rent_amount),
+                    'commission': float(trans.commission_amount),
+                    'payout': float(trans.landlord_payout_amount),
+                    'tenant_email': trans.rent_payment.user.email if trans.rent_payment.user else 'N/A',
+                    'payment_method': trans.payment_method or 'mpesa',
+                    'date': trans.date_paid.strftime('%Y-%m-%d'),
+                    'month': trans.rent_payment.month,
+                    'year': trans.rent_payment.year
+                })
+
+            for trans in recent_service_transactions:
+                recent_transactions.append({
+                    'id': trans.id,
+                    'type': 'service',
+                    'amount': float(trans.service_instance.amount),
+                    'commission': float(trans.commission_amount),
+                    'payout': float(trans.landlord_payout_amount),
+                    'tenant_email': trans.service_instance.user.email if trans.service_instance.user else 'N/A',
+                    'payment_method': trans.payment_method or 'mpesa',
+                    'date': trans.date_paid.strftime('%Y-%m-%d'),
+                    'service_name': trans.service_instance.service_name
+                })
+
+            # Sort by date
+            recent_transactions.sort(key=lambda x: x['date'], reverse=True)
+            recent_transactions = recent_transactions[:10]
+
+            # Get property summary
+            property_summary = []
+            for prop in landlord_properties:
+                blocks = PropertyBlock.objects.filter(block=prop)
+                block_ids_for_prop = [b.id for b in blocks]
+
+                prop_rent = RentTransaction.objects.filter(
+                    rent_payment__property_block_id__in=block_ids_for_prop,
+                    status=1
+                ).aggregate(total=Sum('rent_payment__rent_amount'))['total'] or Decimal('0')
+
+                prop_service = serviceTransactions.objects.filter(
+                    service_instance__block=prop,
+                    status=1
+                ).aggregate(total=Sum('service_instance__amount'))['total'] or Decimal('0')
+
+                # Count tenants
+                tenant_count = Tenant.objects.filter(PropertyBlock_id__in=block_ids_for_prop).count()
+
+                property_summary.append({
+                    'property_id': prop.id,
+                    'block_number': prop.block_number,
+                    'location': prop.location,
+                    'total_revenue': float(prop_rent + prop_service),
+                    'rent_revenue': float(prop_rent),
+                    'service_revenue': float(prop_service),
+                    'tenant_count': tenant_count
+                })
+
+            # Response data
+            response_data = {
+                'status': True,
+                'data': {
+                    'summary': {
+                        'total_revenue': float(total_revenue),
+                        'total_commission': float(total_commission),
+                        'total_landlord_payout': float(total_landlord_payout),
+                        'commission_rate': 0.05,  # 5%
+                        'total_rent_revenue': float(rent_data['total_rent'] or 0),
+                        'total_service_revenue': float(service_data['total_service'] or 0),
+                        'rent_transaction_count': rent_data['rent_count'],
+                        'service_transaction_count': service_data['service_count']
+                    },
+                    'monthly_trends': monthly_trends,
+                    'recent_transactions': recent_transactions,
+                    'property_summary': property_summary,
+                    'period': period,
+                    'year': int(year),
+                    'month': int(month) if period == 'month' else None
+                }
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': False,
+                'message': f'Error fetching financial data: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

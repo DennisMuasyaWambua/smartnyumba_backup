@@ -209,7 +209,7 @@ class ForgotPasswordAPIView(APIVIEW):
             user = user.first()
             
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
             email_response = send_forgot_password_otp(email=user,otp=otp)
             
             
@@ -269,7 +269,7 @@ class VerifyChangePasswordAPIView(APIVIEW):
             user = user.first()
             
             verify_otp = OtpVerificationCode.objects.filter(
-                    email=user, validated=False)
+                    email=user.email, validated=False)
             if not verify_otp.exists():
                 return Response({
                     'status': False,
@@ -332,7 +332,7 @@ class ResendOtpAPIView(APIVIEW):
             
             user = user.first()
             
-            verify_otp = OtpVerificationCode.objects.filter(email=user, validated=False)
+            verify_otp = OtpVerificationCode.objects.filter(email=user.email, validated=False)
             if not verify_otp.exists():
                 return Response({
                     'status': False,
@@ -343,7 +343,7 @@ class ResendOtpAPIView(APIVIEW):
             verify_otp.delete()
 
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
             email_response = send_forgot_password_otp(email=user,otp=otp)
             
             
@@ -604,7 +604,7 @@ class UserRegisterAPIView(APIVIEW):
                         mobile_number=mobile_number,
                         password=encrypted_password
                     )
-                    user.save()
+                    user.is_active = False  # User inactive until OTP verified (and payment for landlords)
                     user.status = 0
                     user.save()
 
@@ -655,12 +655,25 @@ class UserRegisterAPIView(APIVIEW):
                             status=0
                         )
 
-                        # Send credentials email
-                        email_response = send_creation_email(email=email, password=password)
+                        # Generate OTP for landlord verification (just like tenants)
+                        otp = random.randint(1111, 9999)
+                        email_response = send_otp_message(email=email, otp=otp)
+
+                        if not email_response:
+                            return Response({
+                                'status': False,
+                                'message': 'Error sending OTP'
+                            }, status=status.HTTP_400_BAD_REQUEST)
+
+                        # Store OTP for verification
+                        LoginOTP.objects.create(mobile_number=mobile_number, otp=otp)
+
+                        # Also send credentials email
+                        send_creation_email(email=email, password=password)
 
                         return Response({
                             'status': True,
-                            'message': f'Landlord account created. Please initiate payment of KES {activation_fee} to activate.',
+                            'message': f'Landlord account created. OTP sent to your email.',
                             'user_id': user.id,
                             'email': email,
                             'activation_fee': float(activation_fee),
@@ -756,7 +769,7 @@ class UserRegisterAPIView(APIVIEW):
 
                             # Generate OTP and send to approver
                             otp = random.randint(1111, 9999)
-                            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+                            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
 
                             otp_email_response = approve_accounts_profile(otp=otp, email=approver, accounts_email=email)
 
@@ -804,21 +817,19 @@ class UserRegisterVerificationAPIView(APIVIEW):
                 }, status=status.HTTP_404_NOT_FOUND)
             user = check_user.first()
             print(user)
+
+            # Get user's role
+            user_role = user.role.short_name if user.role else None
+            print(f"User role: {user_role}")
+
+            # Check if already activated
             if user.is_active:
                 return Response({
                     'status': False,
                     'message':'Account has already been activated'
                 }, status=status.HTTP_403_FORBIDDEN)
-            
-            role = Role.objects.filter(short_name='tenant')
-            if not role.exists():
-                return Response({
-                    'status': False,
-                    'message': 'Role not found.'
-                }, status=status.HTTP_404_NOT_FOUND)
-                
-            role = role.first()
-            print(role)
+
+            # Verify OTP
             print(user.mobile_number)
             login_otp = LoginOTP.objects.filter(mobile_number=user.mobile_number)
             if not login_otp.exists():
@@ -833,30 +844,59 @@ class UserRegisterVerificationAPIView(APIVIEW):
                     'message': 'OTP does not match.'
                 }, status=status.HTTP_403_FORBIDDEN)
 
-            smart_nyumba_user = Tenant.objects.filter(user=user)
-            if not smart_nyumba_user.exists():
+            # Handle verification based on role
+            if user_role == 'tenant':
+                # TENANT: Activate immediately after OTP verification
+                smart_nyumba_user = Tenant.objects.filter(user=user)
+                if not smart_nyumba_user.exists():
+                    return Response({
+                        'status': False,
+                        'message': 'Tenant user profile not found.'
+                    }, status=status.HTTP_404_NOT_FOUND)
+                smart_nyumba_user = smart_nyumba_user.first()
+                print(smart_nyumba_user)
+                smart_nyumba_user.is_active=1
+                smart_nyumba_user.save()
+                user.status=1
+                user.is_active=1
+                user.save()
+                return Response({
+                    'status': True,
+                    'message': 'Account activated. Navigate to login',
+                }, status=status.HTTP_200_OK)
+
+            elif user_role == 'landlord':
+                # LANDLORD: OTP verified but NOT activated yet (needs payment)
+                # Just mark OTP as validated, user stays inactive until payment
+                from authentication.models import BlockLandlord
+                landlord = BlockLandlord.objects.filter(user=user)
+                if not landlord.exists():
+                    return Response({
+                        'status': False,
+                        'message': 'Landlord profile not found.'
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+                # Mark OTP as validated by deleting it
+                login_otp.delete()
+
+                return Response({
+                    'status': True,
+                    'message': 'OTP verified. Please complete payment to activate your account.',
+                    'requires_payment': True
+                }, status=status.HTTP_200_OK)
+
+            else:
                 return Response({
                     'status': False,
-                    'message': 'Arronax user profile not found.'
-                }, status=status.HTTP_404_NOT_FOUND)
-            smart_nyumba_user = smart_nyumba_user.first()
-            print(smart_nyumba_user)
-            smart_nyumba_user.is_active=1
-            smart_nyumba_user.save()
-            user.status=1
-            user.role = role
-            user.is_active=1
-            user.save()
-            return Response({
-                'status': True,
-                'message': 'Account activated. Navigate to login',
-            }, status=status.HTTP_200_OK)
-            
+                    'message': f'OTP verification not supported for role: {user_role}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
         except Exception as error:
             print(str(error))
             return Response({
                 'status': False,
-                'message': 'Couldnt be able to send otp'
+                'message': 'Could not verify OTP',
+                'detail': str(error)
             }, status=status.HTTP_403_FORBIDDEN)
 
 class UserLoginAPIView(APIVIEW):
@@ -1046,7 +1086,7 @@ class UserForgotPasswordAPIView(APIVIEW):
             user = user.first()
             
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
             email_response = send_forgot_password_otp(email=user,otp=otp)
             
             
@@ -1106,7 +1146,7 @@ class UserVerifyChangePasswordAPIView(APIVIEW):
             user = user.first()
             
             verify_otp = OtpVerificationCode.objects.filter(
-                    email=user, validated=False)
+                    email=user.email, validated=False)
             if not verify_otp.exists():
                 return Response({
                     'status': False,
@@ -1169,7 +1209,7 @@ class UserResendOtpAPIView(APIVIEW):
             
             user = user.first()
             
-            verify_otp = OtpVerificationCode.objects.filter(email=user, validated=False)
+            verify_otp = OtpVerificationCode.objects.filter(email=user.email, validated=False)
             if not verify_otp.exists():
                 return Response({
                     'status': False,
@@ -1180,7 +1220,7 @@ class UserResendOtpAPIView(APIVIEW):
             verify_otp.delete()
 
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
             email_response = send_forgot_password_otp(email=user,otp=otp)
             
             
