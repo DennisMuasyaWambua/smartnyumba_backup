@@ -11,6 +11,8 @@ from django.db import transaction
 
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from authentication.models import LoginOTP, OtpVerificationCode, Role, Tenant, staffAdmin
 from block_landlord.models import BlockLandlord
 from staff_accounts.models import staffAccounts
@@ -24,6 +26,7 @@ User = get_user_model()
 from authentication.api.serializers import AdminLogOutSerializer, AdminProfileSerializer, AllProperiesSerializer, ForgotPasswordSerializer, LoginSerializer, NewPasswordSerializer, ResendOtpSerializer, TenantProfileSerializer, UserLogOutSerializer, UserRegisterSerializer, UserRegisterVerificationSerializer, VerifyChangePasswordSerializer
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class AdminLoginAPIView(APIVIEW):
     serializer_class = LoginSerializer
 
@@ -171,10 +174,11 @@ class AdminLogoutAPIView(APIVIEW):
                 'message': 'Failed to logout'
             })
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ForgotPasswordAPIView(APIVIEW):
     authentication_classes=[]
     serializer_class = ForgotPasswordSerializer
-    
+
     def post(self, request):
         try:
             
@@ -231,10 +235,11 @@ class ForgotPasswordAPIView(APIVIEW):
             }, status=status.HTTP_403_FORBIDDEN)
         
 
+@method_decorator(csrf_exempt, name='dispatch')
 class VerifyChangePasswordAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = VerifyChangePasswordSerializer
-    
+
     def post(self, request):
         try:
             
@@ -296,10 +301,11 @@ class VerifyChangePasswordAPIView(APIVIEW):
             }, status=status.HTTP_403_FORBIDDEN)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ResendOtpAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = ResendOtpSerializer
-    
+
     def post(self, request):
         try:
             data = request.data
@@ -366,6 +372,7 @@ class ResendOtpAPIView(APIVIEW):
                 'message': 'We could not send otp'
             }, status=status.HTTP_403_FORBIDDEN)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class NewPasswordAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = NewPasswordSerializer
@@ -431,10 +438,11 @@ class NewPasswordAPIView(APIVIEW):
         
 #----USER
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserRegisterAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = UserRegisterSerializer
-    
+
     def post(self, request):
 
         try:
@@ -792,10 +800,11 @@ class UserRegisterAPIView(APIVIEW):
                 'detail': str(error)
             }, status=status.HTTP_403_FORBIDDEN)
     
+@method_decorator(csrf_exempt, name='dispatch')
 class UserRegisterVerificationAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = UserRegisterVerificationSerializer
-    
+
     def post(self, request):
         try:
             serializer = self.serializer_class(data=request.data)
@@ -899,6 +908,7 @@ class UserRegisterVerificationAPIView(APIVIEW):
                 'detail': str(error)
             }, status=status.HTTP_403_FORBIDDEN)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserLoginAPIView(APIVIEW):
     serializer_class = LoginSerializer
 
@@ -1048,10 +1058,11 @@ class UserLogoutAPIView(APIVIEW):
                 'message': 'Failed to logout'
             })
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserForgotPasswordAPIView(APIVIEW):
     authentication_classes=[]
     serializer_class = ForgotPasswordSerializer
-    
+
     def post(self, request):
         try:
             
@@ -1108,10 +1119,11 @@ class UserForgotPasswordAPIView(APIVIEW):
             }, status=status.HTTP_403_FORBIDDEN)
         
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserVerifyChangePasswordAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = VerifyChangePasswordSerializer
-    
+
     def post(self, request):
         try:
             
@@ -1173,10 +1185,11 @@ class UserVerifyChangePasswordAPIView(APIVIEW):
             }, status=status.HTTP_403_FORBIDDEN)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserResendOtpAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = ResendOtpSerializer
-    
+
     def post(self, request):
         try:
             data = request.data
@@ -1243,6 +1256,7 @@ class UserResendOtpAPIView(APIVIEW):
                 'message': 'We could not send otp'
             }, status=status.HTTP_403_FORBIDDEN)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserNewPasswordAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = NewPasswordSerializer
@@ -1388,6 +1402,7 @@ class AdminProfileAPIView(APIVIEW):
                 'message': 'Could not view tenant profile'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+@method_decorator(csrf_exempt, name='dispatch')
 class AllPropertiesAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = AllProperiesSerializer
@@ -1407,6 +1422,7 @@ class AllPropertiesAPIView(APIVIEW):
             print("An integrity error occured")
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class InitiateActivationPaymentAPIView(APIVIEW):
     """
     Initiates M-Pesa STK Push for landlord activation fee.
@@ -1561,6 +1577,7 @@ class InitiateActivationPaymentAPIView(APIVIEW):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ActivationMpesaCallBackAPIView(APIVIEW):
     """
     Handles M-Pesa callback for activation payments.
@@ -1664,6 +1681,7 @@ class ActivationMpesaCallBackAPIView(APIVIEW):
             }, status=status.HTTP_200_OK)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class CheckActivationStatusAPIView(APIVIEW):
     """
     Check if landlord has paid activation fee and account is activated.
@@ -1730,6 +1748,7 @@ class CheckActivationStatusAPIView(APIVIEW):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class LandlordLoginAPIView(APIVIEW):
     """
     Landlord login endpoint with activation check.
