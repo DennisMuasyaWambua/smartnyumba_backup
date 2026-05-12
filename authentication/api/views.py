@@ -597,7 +597,7 @@ class UserRegisterAPIView(APIVIEW):
                         }, status=status.HTTP_400_BAD_REQUEST)
 
                     # Format phone number for non-tenant
-                    phone_number = phone_number[:9]
+                    phone_number = phone_number[-9:]
                     mobile_number = f'254{phone_number}'
 
                     # Generate random password
@@ -877,7 +877,6 @@ class UserRegisterVerificationAPIView(APIVIEW):
             elif user_role == 'landlord':
                 # LANDLORD: OTP verified but NOT activated yet (needs payment)
                 # Just mark OTP as validated, user stays inactive until payment
-                from authentication.models import BlockLandlord
                 landlord = BlockLandlord.objects.filter(user=user)
                 if not landlord.exists():
                     return Response({
@@ -1711,10 +1710,11 @@ class CheckActivationStatusAPIView(APIVIEW):
 
             # Check if landlord
             if user.role.short_name != 'landlord':
+                # Non-landlords don't need activation payment
                 return Response({
                     'status': True,
-                    'is_activated': user.status == 1,
-                    'requires_payment': False
+                    'message': 'Not a landlord account',
+                    'activation_status': 1 if user.status == 1 else 0
                 }, status=status.HTTP_200_OK)
 
             # Get activation payment
@@ -1726,18 +1726,19 @@ class CheckActivationStatusAPIView(APIVIEW):
                 config = SystemConfiguration.get_config()
                 return Response({
                     'status': True,
-                    'is_activated': False,
-                    'requires_payment': True,
-                    'activation_fee': float(config.landlord_activation_fee),
-                    'payment_status': 'not_initiated'
+                    'message': 'Payment not initiated',
+                    'activation_status': 0,  # pending
+                    'activation_fee': str(config.landlord_activation_fee)
                 }, status=status.HTTP_200_OK)
 
+            # Map activation_payment.status to activation_status
+            # activation_payment.status: 0=pending, 1=completed, 2=failed
+            # activation_status: 0=pending, 1=completed, 2=failed (same mapping)
             return Response({
                 'status': True,
-                'is_activated': user.status == 1,
-                'requires_payment': user.status != 1,
-                'activation_fee': float(activation_payment.amount),
-                'payment_status': 'completed' if activation_payment.status == 1 else 'pending'
+                'message': 'Activation status retrieved',
+                'activation_status': activation_payment.status,
+                'activation_fee': str(activation_payment.amount)
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
