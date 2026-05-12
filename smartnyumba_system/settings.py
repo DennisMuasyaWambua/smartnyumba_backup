@@ -251,6 +251,10 @@ B2C_CER = config('B2C_CER')
 PLATFORM_COMMISSION_RATE = config('PLATFORM_COMMISSION_RATE', default='0.05', cast=float)
 
 # Pesapal Configuration
+# IMPORTANT: Base URLs must NOT include '/api' suffix
+# Sandbox: https://cybqa.pesapal.com/pesapalv3
+# Production: https://pay.pesapal.com/v3
+# Endpoints like '/Auth/RequestToken' are appended to the base URL
 PESAPAL_CONSUMER_KEY = config('PESAPAL_CONSUMER_KEY', default='FHzwQRiIVVhTs4ZU9QM2V6Bem44KuBRa')
 PESAPAL_CONSUMER_SECRET = config('PESAPAL_CONSUMER_SECRET', default='JwpABThwdS13EsCK0gnMwGLpmog=')
 PESAPAL_BASE_URL = config('PESAPAL_BASE_URL', default='https://cybqa.pesapal.com/pesapalv3')  # Sandbox URL

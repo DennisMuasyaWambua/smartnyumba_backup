@@ -72,16 +72,30 @@ def get_oauth_token() -> str:
     }
 
     try:
-        logger.info("Requesting new Pesapal OAuth token")
+        logger.info(f"Requesting new Pesapal OAuth token from: {url}")
         response = requests.post(
             url,
             json=payload,
             headers=headers,
             timeout=REQUEST_TIMEOUT
         )
+
+        # Log response details for debugging
+        logger.info(f"Pesapal OAuth response status: {response.status_code}")
+        logger.debug(f"Pesapal OAuth response headers: {response.headers}")
+
         response.raise_for_status()
 
-        data = response.json()
+        # Log raw response text before parsing
+        response_text = response.text
+        logger.debug(f"Pesapal OAuth raw response: {response_text[:500]}")  # First 500 chars
+
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError as json_err:
+            logger.error(f"Failed to parse Pesapal response as JSON. Status: {response.status_code}, Response: {response_text[:1000]}")
+            raise PesapalException(f"Invalid JSON response from Pesapal (Status {response.status_code}). Check API endpoint and credentials.")
+
         token = data.get('token')
         expires_in = data.get('expiryDate')  # Pesapal returns expiryDate in seconds or ISO format
 
@@ -109,6 +123,9 @@ def get_oauth_token() -> str:
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Pesapal OAuth token request failed: {str(e)}")
+        # Log additional details if response is available
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response status: {e.response.status_code}, Body: {e.response.text[:1000]}")
         raise PesapalException(f"Failed to connect to Pesapal: {str(e)}")
     except (KeyError, ValueError) as e:
         logger.error(f"Invalid Pesapal token response format: {str(e)}")
