@@ -63,10 +63,14 @@ def get_oauth_token() -> str:
 
     # Request new token
     url = f"{settings.PESAPAL_BASE_URL}{PESAPAL_TOKEN_ENDPOINT}"
+    print(f"Requesting new Pesapal OAuth token from: {url}")  # Debug print for endpoint URL
+    logging.info(f"Requesting new Pesapal OAuth token from: {url}")
     payload = {
         "consumer_key": settings.PESAPAL_CONSUMER_KEY,
         "consumer_secret": settings.PESAPAL_CONSUMER_SECRET
     }
+    print(f"Pesapal OAuth payload: {payload}")  # Debug print for payload
+    logging.info(f"Pesapal OAuth payload: {payload}")
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json"
@@ -81,8 +85,8 @@ def get_oauth_token() -> str:
             timeout=REQUEST_TIMEOUT
         )
 
-        # Log response details for debugging
-        logger.info(f"Pesapal OAuth response status: {response.status_code}")
+        print(f"Pesapal OAuth response: {response}")  # Debug print for response
+        logging.info(f"Pesapal OAuth response status: {response.status_code}")
         logger.debug(f"Pesapal OAuth response headers: {response.headers}")
 
         response.raise_for_status()
@@ -93,6 +97,8 @@ def get_oauth_token() -> str:
 
         try:
             data = response.json()
+            print(f"Pesapal OAuth response JSON: {data}")  # Debug print for parsed JSON
+            logging.info(f"Pesapal OAuth response JSON: {data}")
         except requests.exceptions.JSONDecodeError as json_err:
             logger.error(f"Failed to parse Pesapal response as JSON. Status: {response.status_code}, Response: {response_text[:1000]}")
             raise PesapalException(f"Invalid JSON response from Pesapal (Status {response.status_code}). Check API endpoint and credentials.")
