@@ -72,8 +72,8 @@ def get_oauth_token() -> str:
     print(f"Pesapal OAuth payload: {payload}")  # Debug print for payload
     logging.info(f"Pesapal OAuth payload: {payload}")
     headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
     }
 
     try:
