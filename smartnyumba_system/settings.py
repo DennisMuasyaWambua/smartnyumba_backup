@@ -13,7 +13,7 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = True
 
 # ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost', cast=Csv())
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ["178.105.35.41", "api.smartnyumba.com", "smartnyumba.com", "api.smartnyumba.tech", "smartnyumba.tech", "localhost"]
 
 
 # Application definition
