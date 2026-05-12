@@ -21,10 +21,10 @@ from rest_framework.exceptions import APIException
 logger = logging.getLogger(__name__)
 
 # Pesapal API endpoints
-PESAPAL_TOKEN_ENDPOINT = '/api/Auth/RequestToken'
-PESAPAL_IPN_REGISTER_ENDPOINT = '/api/URLSetup/RegisterIPN'
-PESAPAL_SUBMIT_ORDER_ENDPOINT = '/api/Transactions/SubmitOrderRequest'
-PESAPAL_TRANSACTION_STATUS_ENDPOINT = '/api/Transactions/GetTransactionStatus'
+PESAPAL_TOKEN_ENDPOINT = '/Auth/RequestToken'
+PESAPAL_IPN_REGISTER_ENDPOINT = '/URLSetup/RegisterIPN'
+PESAPAL_SUBMIT_ORDER_ENDPOINT = '/Transactions/SubmitOrderRequest'
+PESAPAL_TRANSACTION_STATUS_ENDPOINT = '/Transactions/GetTransactionStatus'
 
 # Cache keys
 PESAPAL_TOKEN_CACHE_KEY = 'pesapal_oauth_token'
