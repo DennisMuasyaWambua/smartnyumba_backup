@@ -20,6 +20,8 @@ from caretaker.models import Caretaker
 from email_service.email_service import send_forgot_password_otp, send_otp_message, send_creation_email, approve_accounts_profile
 from properties.models import Property, PropertyBlock
 
+import logging
+
 
 User = get_user_model()
 
@@ -1543,7 +1545,8 @@ class InitiateActivationPaymentAPIView(APIVIEW):
                     currency='KES',
                     billing_address=billing_address
                 )
-
+                logging.info(f"Pesapal response for activation payment: {pesapal_response}")
+                
                 # Create transaction record
                 ActivationTransaction.objects.create(
                     activation_payment=activation_payment,
