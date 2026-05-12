@@ -25,6 +25,7 @@ urlpatterns = [
     #-----ACTIVATION PAYMENT--------#
     path('initiate-activation-payment/', views.InitiateActivationPaymentAPIView.as_view(), name='initiate-activation-payment'),
     path('activation-mpesa-callback/', views.ActivationMpesaCallBackAPIView.as_view(), name='activation-mpesa-callback'),
+    path('activation-pesapal-callback/', views.ActivationPesapalCallBackAPIView.as_view(), name='activation-pesapal-callback'),
     path('check-activation-status/', views.CheckActivationStatusAPIView.as_view(), name='check-activation-status'),
     path('landlord-login/', views.LandlordLoginAPIView.as_view(), name='landlord-login'),
 

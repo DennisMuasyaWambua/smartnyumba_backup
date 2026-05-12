@@ -254,3 +254,6 @@ PLATFORM_COMMISSION_RATE = config('PLATFORM_COMMISSION_RATE', default='0.05', ca
 PESAPAL_CONSUMER_KEY = config('PESAPAL_CONSUMER_KEY', default='FHzwQRiIVVhTs4ZU9QM2V6Bem44KuBRa')
 PESAPAL_CONSUMER_SECRET = config('PESAPAL_CONSUMER_SECRET', default='JwpABThwdS13EsCK0gnMwGLpmog=')
 PESAPAL_BASE_URL = config('PESAPAL_BASE_URL', default='https://cybqa.pesapal.com/pesapalv3')  # Sandbox URL
+
+# Site Configuration
+SITE_URL = config('SITE_URL', default='http://localhost:8000')

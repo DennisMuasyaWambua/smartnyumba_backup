@@ -16,10 +16,10 @@ import os
 def get_access_token():
     client_id = settings.SAFARICOM_AUTH_KEY
     client_secret = settings.SAFARICOM_AUTH_CONSUMER_SECRET
-    
+
     token_endpoint = settings.SAFARICOM_AUTH_ENDPOINT
 
-    
+
 
     # Combine the client ID and client secret for Basic Authentication
     auth_header = f"{client_id}:{client_secret}"
@@ -36,6 +36,9 @@ def get_access_token():
             return access_token
         else:
             print("Token request failed with status code:", response.status_code)
+            print("Token endpoint:", token_endpoint)
+            print("Response:", response.text)
+            print("Check your SAFARICOM_AUTH_KEY and SAFARICOM_AUTH_CONSUMER_SECRET in .env")
             return False
     except Exception as error:
         print('TOKEN ERROR:', str(error))

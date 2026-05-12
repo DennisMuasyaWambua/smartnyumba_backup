@@ -676,8 +676,8 @@ class UserRegisterAPIView(APIVIEW):
                         # Store OTP for verification
                         LoginOTP.objects.create(mobile_number=mobile_number, otp=otp)
 
-                        # Also send credentials email
-                        send_creation_email(email=email, password=password)
+                        # Note: Credentials email removed - only OTP email is sent
+                        # Password can be reset if needed via forgot password flow
 
                         return Response({
                             'status': True,
@@ -1424,7 +1424,7 @@ class AllPropertiesAPIView(APIVIEW):
 @method_decorator(csrf_exempt, name='dispatch')
 class InitiateActivationPaymentAPIView(APIVIEW):
     """
-    Initiates M-Pesa STK Push for landlord activation fee.
+    Initiates Pesapal payment for landlord activation fee.
     Can be called during registration or later for retry.
     """
     authentication_classes = []
@@ -1433,6 +1433,8 @@ class InitiateActivationPaymentAPIView(APIVIEW):
         try:
             email = request.data.get('email')
             mobile_number = request.data.get('mobile_number')
+            first_name = request.data.get('first_name', '')
+            last_name = request.data.get('last_name', '')
 
             # Validate email
             email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
@@ -1473,7 +1475,7 @@ class InitiateActivationPaymentAPIView(APIVIEW):
                 user=user,
                 defaults={
                     'amount': activation_fee,
-                    'payment_mode': 'mpesa',
+                    'payment_mode': 'pesapal',
                     'status': 0
                 }
             )
@@ -1485,91 +1487,93 @@ class InitiateActivationPaymentAPIView(APIVIEW):
                     'message': 'Activation payment already completed'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Format mobile number
+            # Format mobile number (Pesapal format: 254XXXXXXXXX or +254XXXXXXXXX)
             if mobile_number:
-                mobile_number = mobile_number[-9:]
-                mobile_number = f'254{mobile_number}'
+                mobile_number = mobile_number.replace('+', '').replace(' ', '')
+                if mobile_number.startswith('0'):
+                    mobile_number = '254' + mobile_number[1:]
+                elif mobile_number.startswith('254'):
+                    pass  # Already in correct format
+                elif len(mobile_number) == 9:
+                    mobile_number = '254' + mobile_number
             else:
-                mobile_number = user.mobile_number[-9:]
-                mobile_number = f'254{mobile_number}'
-
-            if len(mobile_number) > 13:
-                return Response({
-                    'status': False,
-                    'message': 'Mobile number too long'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                mobile_number = user.mobile_number.replace('+', '').replace(' ', '')
+                if mobile_number.startswith('0'):
+                    mobile_number = '254' + mobile_number[1:]
 
             # Update payment mode
-            activation_payment.payment_mode = 'mpesa'
+            activation_payment.payment_mode = 'pesapal'
             activation_payment.save()
 
-            # INITIATE M-PESA STK PUSH (reuse existing pattern)
-            from utils.api_auth import get_access_token
+            # INITIATE PESAPAL PAYMENT
+            from utils.pesapal_service import submit_order, PesapalException
             from django.conf import settings
-            import datetime
-            import base64
-            import requests
-            import json
+            from decimal import Decimal
 
-            access_token = get_access_token()
-            headers = {
-                'Content-Type': 'application/json',
-                "Authorization": f'Bearer {access_token}'
+            # Generate unique merchant reference
+            import uuid
+            merchant_reference = f"ACTIVATION-{user.id}-{uuid.uuid4().hex[:8]}"
+
+            # Prepare billing address
+            billing_address = {
+                "phone_number": mobile_number,
+                "email_address": email,
+                "country_code": "KE",
+                "first_name": first_name or user.first_name or "Landlord",
+                "middle_name": "",
+                "last_name": last_name or user.last_name or "User",
+                "line_1": "",
+                "line_2": "",
+                "city": "",
+                "state": "",
+                "postal_code": "",
+                "zip_code": ""
             }
 
-            endpoint = settings.SAFARICOM_STK_PUSH
-            Business_short_code = settings.BUSINESS_SHORT_CODE
-            partyB = settings.TILLNUMBER
-            timestamp = f"{datetime.datetime.now():%Y%m%d%H%M%S}"
-            pass_key = settings.SAFARICOM_PASS_KEY
-            message = f'{Business_short_code}{pass_key}{timestamp}'
-            password = base64.b64encode(message.encode('ascii')).decode('ascii')
-            CallBackURL = 'https://api.smartnyumba.com/apps/api/v1/auth/activation-mpesa-callback/'
+            # Callback URL for IPN
+            callback_url = f"{settings.SITE_URL}/apps/api/v1/auth/activation-pesapal-callback/"
 
-            payload = {
-                "BusinessShortCode": Business_short_code,
-                "Password": password,
-                "Timestamp": timestamp,
-                "TransactionType": "CustomerBuyGoodsOnline",
-                "Amount": int(activation_fee),
-                "PartyA": mobile_number,
-                "PartyB": partyB,
-                "PhoneNumber": mobile_number,
-                "CallBackURL": CallBackURL,
-                "AccountReference": f"ACTIVATION-{user.id}",
-                "TransactionDesc": "Landlord Activation Fee"
-            }
+            # Submit order to Pesapal
+            try:
+                pesapal_response = submit_order(
+                    merchant_reference=merchant_reference,
+                    amount=Decimal(str(activation_fee)),
+                    description=f"Landlord Activation Fee for {email}",
+                    callback_url=callback_url,
+                    currency='KES',
+                    billing_address=billing_address
+                )
 
-            response = requests.post(endpoint, json=payload, headers=headers)
-            json_response = json.loads(response.text)
-
-            print(f"Activation STK Push response: {json_response}")
-
-            if response.status_code == 200:
                 # Create transaction record
                 ActivationTransaction.objects.create(
                     activation_payment=activation_payment,
-                    MerchantRequestID=json_response.get('MerchantRequestID'),
-                    CheckoutRequestID=json_response.get('CheckoutRequestID'),
+                    MerchantRequestID=pesapal_response.get('order_tracking_id'),
+                    CheckoutRequestID=merchant_reference,
                     PhoneNumber=mobile_number,
-                    status=0
+                    status=0  # Pending
                 )
 
                 return Response({
                     'status': True,
-                    'message': 'STK Push sent. Please enter M-Pesa PIN.',
-                    'amount': float(activation_fee),
-                    'MerchantRequestID': json_response.get('MerchantRequestID')
+                    'message': 'Please complete payment in the checkout page',
+                    'redirect_url': pesapal_response.get('redirect_url'),
+                    'order_tracking_id': pesapal_response.get('order_tracking_id'),
+                    'merchant_reference': merchant_reference,
+                    'amount': float(activation_fee)
                 }, status=status.HTTP_200_OK)
-            else:
+
+            except PesapalException as e:
+                print(f"Pesapal payment error: {str(e)}")
                 return Response({
                     'status': False,
-                    'message': 'Payment initiation failed',
-                    'error': json_response
-                }, status=status.HTTP_400_BAD_REQUEST)
+                    'message': 'Payment initiation failed. Please try again later.',
+                    'error': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         except Exception as e:
             print(f"Activation payment error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response({
                 'status': False,
                 'message': 'Could not initiate payment'
@@ -1678,6 +1682,168 @@ class ActivationMpesaCallBackAPIView(APIVIEW):
                 'status': False,
                 'message': 'Callback processing error'
             }, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ActivationPesapalCallBackAPIView(APIVIEW):
+    """
+    Handles Pesapal IPN callback for activation payments.
+    Processes payment completion and activates landlord accounts.
+    """
+    authentication_classes = []
+
+    def get(self, request):
+        """Handle GET IPN from Pesapal"""
+        order_tracking_id = request.GET.get('OrderTrackingId')
+        return self.process_ipn(order_tracking_id)
+
+    def post(self, request):
+        """Handle POST IPN from Pesapal"""
+        order_tracking_id = request.data.get('OrderTrackingId') or request.GET.get('OrderTrackingId')
+        return self.process_ipn(order_tracking_id)
+
+    def process_ipn(self, order_tracking_id):
+        """Process IPN notification from Pesapal"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            logger.info(f"Processing Pesapal IPN for activation: order_tracking_id={order_tracking_id}")
+
+            if not order_tracking_id:
+                return Response({
+                    'status': 'error',
+                    'message': 'OrderTrackingId missing'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Query Pesapal for authoritative transaction status
+            from utils.pesapal_service import get_transaction_status, PesapalException
+
+            try:
+                pesapal_status = get_transaction_status(order_tracking_id)
+            except PesapalException as e:
+                logger.error(f"Failed to query Pesapal status: {str(e)}")
+                return Response({
+                    'status': 'error',
+                    'message': 'Failed to query payment status'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            logger.info(f"Pesapal status: {pesapal_status['status']}")
+
+            # Find transaction by order_tracking_id
+            from authentication.models import ActivationTransaction
+            transaction = ActivationTransaction.objects.filter(
+                MerchantRequestID=order_tracking_id
+            ).first()
+
+            if not transaction:
+                logger.warning(f"Transaction not found for order_tracking_id: {order_tracking_id}")
+                return Response({
+                    'status': 'error',
+                    'message': 'Transaction not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if already processed to prevent duplicate processing
+            if transaction.status == 1:
+                logger.info(f"Transaction {transaction.id} already completed, skipping")
+                return Response({
+                    'status': 'ok',
+                    'message': 'IPN already processed'
+                }, status=status.HTTP_200_OK)
+
+            # Process based on Pesapal status
+            if pesapal_status['status'] == 'COMPLETED':
+                # PAYMENT SUCCESSFUL
+                import datetime
+                logger.info(f"Marking activation transaction {transaction.id} as COMPLETED")
+
+                # Update transaction
+                transaction.status = 1  # Completed
+                transaction.ResultCode = '0'
+                transaction.ResultDesc = 'Payment successful'
+                transaction.MpesaReceiptNumber = pesapal_status.get('confirmation_code', '')
+                transaction.platform_earnings = transaction.activation_payment.amount
+                transaction.date_completed = datetime.datetime.now()
+                transaction.save()
+
+                # Update activation payment
+                activation_payment = transaction.activation_payment
+                activation_payment.status = 1  # Completed
+                activation_payment.completed_at = datetime.datetime.now()
+                activation_payment.save()
+
+                # ACTIVATE USER IMMEDIATELY
+                user = activation_payment.user
+                user.status = 1  # Activated
+                user.is_active = True
+                user.save()
+
+                # Also activate landlord profile
+                from block_landlord.models import BlockLandlord
+                landlord_profile = BlockLandlord.objects.filter(user=user).first()
+                if landlord_profile:
+                    landlord_profile.is_active = 1
+                    landlord_profile.save()
+
+                logger.info(f"User {user.email} activated successfully via Pesapal!")
+
+                return Response({
+                    'status': 'ok',
+                    'message': 'Activation payment successful. Account activated.'
+                }, status=status.HTTP_200_OK)
+
+            elif pesapal_status['status'] == 'FAILED':
+                # PAYMENT FAILED
+                logger.warning(f"Marking activation transaction {transaction.id} as FAILED")
+
+                transaction.status = 2  # Failed
+                transaction.ResultCode = str(pesapal_status.get('payment_status_code', 2))
+                transaction.ResultDesc = pesapal_status.get('payment_status_description', 'Payment failed')
+                transaction.save()
+
+                activation_payment = transaction.activation_payment
+                activation_payment.status = 2  # Failed
+                activation_payment.save()
+
+                return Response({
+                    'status': 'ok',
+                    'message': 'Payment failed'
+                }, status=status.HTTP_200_OK)
+
+            elif pesapal_status['status'] == 'CANCELLED':
+                # PAYMENT CANCELLED
+                logger.info(f"Marking activation transaction {transaction.id} as CANCELLED")
+
+                transaction.status = 3  # Cancelled
+                transaction.ResultCode = '3'
+                transaction.ResultDesc = 'Payment cancelled by user'
+                transaction.save()
+
+                activation_payment = transaction.activation_payment
+                activation_payment.status = 3  # Cancelled
+                activation_payment.save()
+
+                return Response({
+                    'status': 'ok',
+                    'message': 'Payment cancelled'
+                }, status=status.HTTP_200_OK)
+
+            else:
+                # PENDING or unknown status - don't update yet
+                logger.info(f"Transaction {transaction.id} still pending")
+                return Response({
+                    'status': 'ok',
+                    'message': 'Payment still pending'
+                }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Activation Pesapal callback error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': 'error',
+                'message': 'Callback processing error'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
