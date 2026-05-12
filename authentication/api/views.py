@@ -1536,42 +1536,42 @@ class InitiateActivationPaymentAPIView(APIVIEW):
             callback_url = f"{settings.SITE_URL}/apps/api/v1/auth/activation-pesapal-callback/"
 
             # Submit order to Pesapal
-            try:
-                pesapal_response = submit_order(
-                    merchant_reference=merchant_reference,
-                    amount=Decimal(str(activation_fee)),
-                    description=f"Landlord Activation Fee for {email}",
-                    callback_url=callback_url,
-                    currency='KES',
-                    billing_address=billing_address
-                )
-                logging.info(f"Pesapal response for activation payment: {pesapal_response}")
-                
-                # Create transaction record
-                ActivationTransaction.objects.create(
-                    activation_payment=activation_payment,
-                    MerchantRequestID=pesapal_response.get('order_tracking_id'),
-                    CheckoutRequestID=merchant_reference,
-                    PhoneNumber=mobile_number,
-                    status=0  # Pending
-                )
+            # try:
+            pesapal_response = submit_order(
+                merchant_reference=merchant_reference,
+                amount=Decimal(str(activation_fee)),
+                description=f"Landlord Activation Fee for {email}",
+                callback_url=callback_url,
+                currency='KES',
+                billing_address=billing_address
+            )
+            logging.info(f"Pesapal response for activation payment: {pesapal_response}")
 
-                return Response({
-                    'status': True,
-                    'message': 'Please complete payment in the checkout page',
-                    'redirect_url': pesapal_response.get('redirect_url'),
-                    'order_tracking_id': pesapal_response.get('order_tracking_id'),
-                    'merchant_reference': merchant_reference,
-                    'amount': float(activation_fee)
-                }, status=status.HTTP_200_OK)
+            # Create transaction record
+            ActivationTransaction.objects.create(
+                activation_payment=activation_payment,
+                MerchantRequestID=pesapal_response.get('order_tracking_id'),
+                CheckoutRequestID=merchant_reference,
+                PhoneNumber=mobile_number,
+                status=0  # Pending
+            )
 
-            except PesapalException as e:
-                print(f"Pesapal payment error: {str(e)}")
-                return Response({
-                    'status': False,
-                    'message': 'Payment initiation failed. Please try again later.',
-                    'error': str(e)
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({
+                'status': True,
+                'message': 'Please complete payment in the checkout page',
+                'redirect_url': pesapal_response.get('redirect_url'),
+                'order_tracking_id': pesapal_response.get('order_tracking_id'),
+                'merchant_reference': merchant_reference,
+                'amount': float(activation_fee)
+            }, status=status.HTTP_200_OK)
+
+            # except PesapalException as e:
+            #     print(f"Pesapal payment error: {str(e)}")
+            #     return Response({
+            #         'status': False,
+            #         'message': 'Payment initiation failed. Please try again later.',
+            #         'error': str(e)
+            #     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         except Exception as e:
             print(f"Activation payment error: {str(e)}")

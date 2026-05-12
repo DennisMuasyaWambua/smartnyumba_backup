@@ -276,6 +276,7 @@ def submit_order(
 
         data = response.json()
 
+        logging.info(f"Pesapal order submission response: {data}")
         # Pesapal V3 returns order_tracking_id and redirect_url
         order_tracking_id = data.get('order_tracking_id')
         redirect_url = data.get('redirect_url')
