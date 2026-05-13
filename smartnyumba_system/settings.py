@@ -260,4 +260,4 @@ PESAPAL_CONSUMER_SECRET = config('PESAPAL_CONSUMER_SECRET', default='JwpABThwdS1
 PESAPAL_BASE_URL = config('PESAPAL_BASE_URL', default='https://pay.pesapal.com/v3')  # Sandbox URL
 
 # Site Configuration
-SITE_URL = config('SITE_URL', default='http://localhost:8000')
+SITE_URL = config('SITE_URL', default='https://api.smartnyumba.tech')

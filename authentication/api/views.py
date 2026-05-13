@@ -1532,8 +1532,9 @@ class InitiateActivationPaymentAPIView(APIVIEW):
                 "zip_code": ""
             }
 
-            # Callback URL for IPN
-            callback_url = f"{settings.SITE_URL}/apps/api/v1/auth/activation-pesapal-callback/"
+            # Redirect URL - where user is sent after payment (deep link to app)
+            # The IPN notification will be sent separately to the registered IPN endpoint
+            callback_url = "smartnyumba://payment-complete?type=activation"
 
             # Submit order to Pesapal
             # try:

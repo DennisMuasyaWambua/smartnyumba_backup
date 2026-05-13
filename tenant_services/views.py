@@ -250,8 +250,9 @@ class PayServiceAPIView(APIView):
                     # Build merchant reference
                     merchant_reference = f"SERVICE-{service_transaction.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
 
-                    # Build callback URL (IPN endpoint)
-                    callback_url = request.build_absolute_uri('/apps/api/v1/tenant-services/pesapal/ipn/')
+                    # Redirect URL - where user is sent after payment (deep link to app)
+                    # The IPN notification will be sent separately to the registered IPN endpoint
+                    callback_url = "smartnyumba://payment-complete?type=service"
 
                     # Build billing address
                     billing_address = {
@@ -775,8 +776,9 @@ class PayRentAPIView(APIView):
                     # Build merchant reference
                     merchant_reference = f"RENT-{rent_transaction.id}-{month}-{year}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
 
-                    # Build callback URL (IPN endpoint)
-                    callback_url = request.build_absolute_uri('/apps/api/v1/tenant-services/pesapal/ipn/')
+                    # Redirect URL - where user is sent after payment (deep link to app)
+                    # The IPN notification will be sent separately to the registered IPN endpoint
+                    callback_url = "smartnyumba://payment-complete?type=rent"
 
                     # Build billing address
                     billing_address = {
