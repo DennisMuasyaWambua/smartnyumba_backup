@@ -83,7 +83,7 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
-CSRF_TRUSTED_ORIGINS = ['https://smartnyumbabackup-production.up.railway.app','https://api.smartnyumba.com']
+CSRF_TRUSTED_ORIGINS = ['https://smartnyumbabackup-production.up.railway.app','https://api.smartnyumba.com','https://api.smartnyumba.tech','https://smartnyumba.com','https://smartnyumba.tech']
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

@@ -13,6 +13,10 @@ urlpatterns = [
     path('all-tenant-payments/', views.AllTenantPaymentsAPIView.as_view(), name='all-tenant-payments'),
     path('platform-earnings/', views.PlatformEarningsAPIView.as_view(), name='platform-earnings'),
 
+    # System configuration endpoints
+    path('system-config/', views.GetSystemConfigAPIView.as_view(), name='get-system-config'),
+    path('update-system-config/', views.UpdateSystemConfigAPIView.as_view(), name='update-system-config'),
+
 ]
 
 

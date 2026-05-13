@@ -100,3 +100,134 @@ class PlatformEarningsAPIView(APIView):
                 'message': 'Could not fetch platform earnings'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+
+class GetSystemConfigAPIView(APIView):
+    """
+    Get current system configuration settings.
+    Admin only.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            current_user = request.user
+            allowed_roles = ['admin']
+
+            if current_user.role.short_name not in allowed_roles:
+                return Response({
+                    'status': False,
+                    'message': 'Admin access only'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            from authentication.models import SystemConfiguration
+            config = SystemConfiguration.get_config()
+
+            return Response({
+                'status': True,
+                'landlord_activation_fee': float(config.landlord_activation_fee),
+                'platform_commission_rate': float(config.platform_commission_rate),
+                'last_updated': config.last_updated.isoformat() if config.last_updated else None,
+                'updated_by': config.updated_by.email if config.updated_by else None
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Get config error: {str(e)}")
+            return Response({
+                'status': False,
+                'message': 'Could not fetch system configuration'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UpdateSystemConfigAPIView(APIView):
+    """
+    Update system configuration settings.
+    Admin only.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            current_user = request.user
+            allowed_roles = ['admin']
+
+            if current_user.role.short_name not in allowed_roles:
+                return Response({
+                    'status': False,
+                    'message': 'Admin access only'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            from authentication.models import SystemConfiguration
+            from decimal import Decimal
+
+            config = SystemConfiguration.get_config()
+
+            # Get values from request
+            activation_fee = request.data.get('landlord_activation_fee')
+            commission_rate = request.data.get('platform_commission_rate')
+
+            updated_fields = []
+
+            # Update activation fee if provided
+            if activation_fee is not None:
+                try:
+                    activation_fee = Decimal(str(activation_fee))
+                    if activation_fee < 0:
+                        return Response({
+                            'status': False,
+                            'message': 'Activation fee cannot be negative'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    config.landlord_activation_fee = activation_fee
+                    updated_fields.append(f"Activation fee: KES {activation_fee}")
+                except (ValueError, TypeError):
+                    return Response({
+                        'status': False,
+                        'message': 'Invalid activation fee format'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update commission rate if provided
+            if commission_rate is not None:
+                try:
+                    commission_rate = Decimal(str(commission_rate))
+                    if not (0 <= commission_rate <= 1):
+                        return Response({
+                            'status': False,
+                            'message': 'Commission rate must be between 0 and 1 (e.g., 0.05 for 5%)'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    config.platform_commission_rate = commission_rate
+                    percentage = float(commission_rate) * 100
+                    updated_fields.append(f"Commission rate: {percentage}%")
+                except (ValueError, TypeError):
+                    return Response({
+                        'status': False,
+                        'message': 'Invalid commission rate format'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not updated_fields:
+                return Response({
+                    'status': False,
+                    'message': 'No fields to update'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Save with current user as updater
+            config.updated_by = current_user
+            config.save()
+
+            update_message = "System configuration updated: " + ", ".join(updated_fields)
+
+            return Response({
+                'status': True,
+                'message': update_message,
+                'landlord_activation_fee': float(config.landlord_activation_fee),
+                'platform_commission_rate': float(config.platform_commission_rate),
+                'updated_by': current_user.email
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Update config error: {str(e)}")
+            return Response({
+                'status': False,
+                'message': 'Could not update system configuration'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
