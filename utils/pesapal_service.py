@@ -224,7 +224,8 @@ def submit_order(
     callback_url: str,
     currency: str = 'KES',
     metadata: Optional[Dict[str, Any]] = None,
-    billing_address: Optional[Dict[str, str]] = None
+    billing_address: Optional[Dict[str, str]] = None,
+    ipn_url: Optional[str] = None
 ) -> Dict[str, str]:
     """
     Submit an order to Pesapal for payment processing.
@@ -233,10 +234,11 @@ def submit_order(
         merchant_reference: Unique reference for this transaction (internal transaction ID)
         amount: Total amount to charge (including commission)
         description: Payment description (e.g., "Rent payment for Tenant X, Property Y")
-        callback_url: URL where Pesapal will send IPN notifications
+        callback_url: URL where user is redirected after payment (can be deep link)
         currency: Currency code (default: KES)
         metadata: Optional metadata dictionary
         billing_address: Optional billing address details
+        ipn_url: Optional HTTPS URL for IPN notifications (defaults to callback_url if not provided)
 
     Returns:
         dict: {
@@ -272,13 +274,17 @@ def submit_order(
             "zip_code": ""
         }
 
+    # Use ipn_url if provided, otherwise fall back to callback_url
+    # IPN URL must be a publicly accessible HTTPS URL, not a deep link
+    notification_url = ipn_url if ipn_url else callback_url
+
     payload = {
         "id": merchant_reference,  # Merchant reference / internal transaction ID
         "currency": currency,
         "amount": amount_str,
         "description": description,
         "callback_url": callback_url,
-        "notification_id": register_ipn(callback_url),  # Register IPN and get ID
+        "notification_id": register_ipn(notification_url),  # Register IPN and get ID
         "billing_address": billing_address
     }
 

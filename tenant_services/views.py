@@ -251,8 +251,10 @@ class PayServiceAPIView(APIView):
                     merchant_reference = f"SERVICE-{service_transaction.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
 
                     # Redirect URL - where user is sent after payment (deep link to app)
-                    # The IPN notification will be sent separately to the registered IPN endpoint
                     callback_url = "smartnyumba://payment-complete?type=service"
+
+                    # IPN URL - where Pesapal sends payment notifications (must be HTTPS backend URL)
+                    ipn_url = "https://api.smartnyumba.tech/apps/api/v1/tenant-services/pesapal-callback/"
 
                     # Build billing address
                     billing_address = {
@@ -280,7 +282,8 @@ class PayServiceAPIView(APIView):
                         description=payment_description,
                         callback_url=callback_url,
                         currency='KES',
-                        billing_address=billing_address
+                        billing_address=billing_address,
+                        ipn_url=ipn_url
                     )
 
                     # Update transaction with order tracking ID
@@ -777,8 +780,10 @@ class PayRentAPIView(APIView):
                     merchant_reference = f"RENT-{rent_transaction.id}-{month}-{year}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
 
                     # Redirect URL - where user is sent after payment (deep link to app)
-                    # The IPN notification will be sent separately to the registered IPN endpoint
                     callback_url = "smartnyumba://payment-complete?type=rent"
+
+                    # IPN URL - where Pesapal sends payment notifications (must be HTTPS backend URL)
+                    ipn_url = "https://api.smartnyumba.tech/apps/api/v1/tenant-services/pesapal-rent-callback/"
 
                     # Build billing address
                     billing_address = {
@@ -806,7 +811,8 @@ class PayRentAPIView(APIView):
                         description=payment_description,
                         callback_url=callback_url,
                         currency='KES',
-                        billing_address=billing_address
+                        billing_address=billing_address,
+                        ipn_url=ipn_url
                     )
 
                     # Update transaction with order tracking ID

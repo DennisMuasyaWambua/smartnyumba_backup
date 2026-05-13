@@ -1533,8 +1533,10 @@ class InitiateActivationPaymentAPIView(APIVIEW):
             }
 
             # Redirect URL - where user is sent after payment (deep link to app)
-            # The IPN notification will be sent separately to the registered IPN endpoint
             callback_url = "smartnyumba://payment-complete?type=activation"
+
+            # IPN URL - where Pesapal sends payment notifications (must be HTTPS backend URL)
+            ipn_url = "https://api.smartnyumba.tech/apps/api/v1/auth/activation-pesapal-callback/"
 
             # Submit order to Pesapal
             # try:
@@ -1544,7 +1546,8 @@ class InitiateActivationPaymentAPIView(APIVIEW):
                 description=f"Landlord Activation Fee for {email}",
                 callback_url=callback_url,
                 currency='KES',
-                billing_address=billing_address
+                billing_address=billing_address,
+                ipn_url=ipn_url
             )
             logging.info(f"Pesapal response for activation payment: {pesapal_response}")
 
