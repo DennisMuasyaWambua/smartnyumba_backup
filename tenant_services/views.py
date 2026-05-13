@@ -1056,7 +1056,7 @@ class PesapalIPNView(APIView):
             print(f"Transaction status from Pesapal: {transaction_status['status']}")
 
             # Find corresponding transaction in database
-            # Try RentTransaction first, then serviceTransactions
+            # Try RentTransaction, serviceTransactions, and ActivationTransaction
             transaction = None
             transaction_type = None
 
@@ -1074,6 +1074,15 @@ class PesapalIPNView(APIView):
                 if service_transaction:
                     transaction = service_transaction
                     transaction_type = 'service'
+                else:
+                    # Check for activation payment
+                    from authentication.models import ActivationTransaction
+                    activation_transaction = ActivationTransaction.objects.filter(
+                        MerchantRequestID=order_tracking_id
+                    ).first()
+                    if activation_transaction:
+                        transaction = activation_transaction
+                        transaction_type = 'activation'
 
             if not transaction:
                 print(f"No transaction found for order_tracking_id: {order_tracking_id}")
@@ -1109,6 +1118,19 @@ class PesapalIPNView(APIView):
                     transaction.service_instance.status = 1
                     transaction.service_instance.save()
                     print(f"Service {transaction.service_instance.id} marked as completed")
+                elif transaction_type == 'activation' and transaction.activation_payment:
+                    # Handle activation payment completion
+                    activation_payment = transaction.activation_payment
+                    activation_payment.status = 1  # Completed
+                    activation_payment.completed_at = timezone.now()
+                    activation_payment.save()
+
+                    # Activate the landlord user account
+                    user = activation_payment.user
+                    user.status = 1  # Active
+                    user.save()
+
+                    print(f"Activation payment {activation_payment.id} completed. User {user.email} activated.")
 
                 # Calculate and save commission
                 from utils.commission import calculate_commission
@@ -1116,16 +1138,24 @@ class PesapalIPNView(APIView):
                     original_amount = transaction.rent_payment.rent_amount
                 elif transaction_type == 'service':
                     original_amount = transaction.service_instance.amount
+                elif transaction_type == 'activation':
+                    # Activation fee goes 100% to platform (no commission split)
+                    original_amount = transaction.activation_payment.amount
+                    transaction.platform_earnings = original_amount
+                    transaction.save()
+                    print(f"Activation fee: {original_amount} (100% platform earnings)")
                 else:
                     original_amount = Decimal('0')
 
-                commission_data = calculate_commission(original_amount)
-                transaction.commission_amount = commission_data['commission_amount']
-                transaction.landlord_payout_amount = commission_data['landlord_payout']
-                transaction.platform_earnings = commission_data['platform_earnings']
-                transaction.save()
+                # Only calculate commission for rent and service payments
+                if transaction_type in ['rent', 'service']:
+                    commission_data = calculate_commission(original_amount)
+                    transaction.commission_amount = commission_data['commission_amount']
+                    transaction.landlord_payout_amount = commission_data['landlord_payout']
+                    transaction.platform_earnings = commission_data['platform_earnings']
+                    transaction.save()
 
-                print(f"Commission calculated: {commission_data['commission_amount']}, Landlord payout: {commission_data['landlord_payout']}")
+                    print(f"Commission calculated: {commission_data['commission_amount']}, Landlord payout: {commission_data['landlord_payout']}")
 
             elif pesapal_status in ['FAILED', 'CANCELLED']:
                 # Payment failed or cancelled
