@@ -73,9 +73,9 @@ class AddPropertyAPIView(APIView):
             new_property = Property.objects.create(block_number=block_number, location=location)
 
             block_landlord.property.add(new_property)
-            
+
             return Response({
-                'status': False,
+                'status': True,
                 'message': 'Property registered successfully'
             }, status=status.HTTP_200_OK)
 
@@ -143,15 +143,15 @@ class AddBlockHousesAPIView(APIView):
                 }, status=status.HTTP_404_NOT_FOUND)
             
             rent_due_date = date.today() + timedelta(days=30)
-            PropertyBlock.objects.create(block=check_block_number, 
-                                        house_number=house_number, 
-                                        service_charge=service_charge,  
-                                        rent_charged=rent_charged, 
+            PropertyBlock.objects.create(block=check_block_number,
+                                        house_number=house_number,
+                                        service_charge=service_charge,
+                                        rent_charged=rent_charged,
                                         rent_due_date=rent_due_date)
 
-            
+
             return Response({
-                'status': False,
+                'status': True,
                 'message': 'House registered successfully'
             }, status=status.HTTP_200_OK)
 
@@ -162,4 +162,138 @@ class AddBlockHousesAPIView(APIView):
             return Response({
                 'status': False,
                 'message': 'Could not add property'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class LandlordAddPropertyAPIView(APIView):
+    """
+    Landlords can create their own properties
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = AddPropertySerializer
+
+    def post(self, request):
+        try:
+            data = request.data
+            current_user = request.user
+
+            serializer = self.serializer_class(data=data)
+            if not serializer.is_valid():
+                return Response({
+                    'status': False,
+                    'message': 'Invalid data provided',
+                    'error': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Only landlords can use this endpoint
+            if current_user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords can add properties'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            block_number = request.data.get('block_number')
+            location = request.data.get('location')
+
+            # Check if block number already exists
+            check_block_number = Property.objects.filter(block_number=block_number)
+            if check_block_number.exists():
+                return Response({
+                    'status': False,
+                    'message': 'Block number already exists'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get landlord profile
+            block_landlord = BlockLandlord.objects.filter(user=current_user).first()
+            if not block_landlord:
+                return Response({
+                    'status': False,
+                    'message': 'Landlord profile not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Create property
+            new_property = Property.objects.create(
+                block_number=block_number,
+                location=location
+            )
+
+            # Associate property with landlord
+            block_landlord.property.add(new_property)
+
+            return Response({
+                'status': True,
+                'message': 'Property added successfully',
+                'property': {
+                    'block_number': block_number,
+                    'location': location
+                }
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            print(str(e))
+            return Response({
+                'status': False,
+                'message': 'Could not add property'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LandlordPropertiesListAPIView(APIView):
+    """
+    Get list of all properties owned by the logged-in landlord
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            current_user = request.user
+
+            # Only landlords can access this
+            if current_user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords can access this resource'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get landlord profile
+            block_landlord = BlockLandlord.objects.filter(user=current_user).first()
+            if not block_landlord:
+                return Response({
+                    'status': False,
+                    'message': 'Landlord profile not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Get all properties
+            properties = block_landlord.property.all()
+
+            properties_data = []
+            for prop in properties:
+                # Get houses in this property
+                houses = PropertyBlock.objects.filter(block=prop)
+                properties_data.append({
+                    'id': prop.id,
+                    'block_number': prop.block_number,
+                    'location': prop.location,
+                    'total_houses': houses.count(),
+                    'houses': [
+                        {
+                            'id': house.id,
+                            'house_number': house.house_number,
+                            'service_charge': str(house.service_charge),
+                            'rent_charged': str(house.rent_charged),
+                            'rent_due_date': house.rent_due_date
+                        }
+                        for house in houses
+                    ]
+                })
+
+            return Response({
+                'status': True,
+                'properties': properties_data,
+                'total_properties': len(properties_data)
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(str(e))
+            return Response({
+                'status': False,
+                'message': 'Could not retrieve properties'
             }, status=status.HTTP_400_BAD_REQUEST)

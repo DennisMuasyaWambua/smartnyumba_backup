@@ -946,15 +946,32 @@ class AllTenantsAPIView(APIView):
     def get(self, request):
         try:
             user = request.user
-            allowed_roles = ['admin']
+            allowed_roles = ['admin', 'landlord']
 
             if not user.role.short_name in allowed_roles:
                 return Response({
                     'status': False,
                     'message': 'Role not allowed to access the resource.'
                 }, status=status.HTTP_403_FORBIDDEN)
-            
-            tenant = Tenant.objects.all().order_by('-id')
+
+            # If landlord, only show their tenants
+            if user.role.short_name == 'landlord':
+                # Get landlord's properties
+                landlord_profile = BlockLandlord.objects.filter(user=user).first()
+                if not landlord_profile:
+                    return Response({
+                        'status': False,
+                        'message': 'Landlord profile not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+                # Get properties associated with this landlord
+                properties = landlord_profile.property.all()
+
+                # Get tenants in these properties
+                tenant = Tenant.objects.filter(PropertyBlock__block__in=properties).order_by('-id')
+            else:
+                # Admin sees all tenants
+                tenant = Tenant.objects.all().order_by('-id')
 
             serializer = self.serializer_class(tenant, many=True)
 
