@@ -2289,8 +2289,8 @@ class LandlordOnboardTenantAPIView(APIVIEW):
                 user = User(
                     email=email,
                     username=email,
-                    firstName=first_name,
-                    lastName=last_name,
+                    first_name=first_name,
+                    last_name=last_name,
                     role=role,
                     mobile_number=formatted_mobile,
                     status=1,  # Auto-activated
