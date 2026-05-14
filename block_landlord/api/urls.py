@@ -12,6 +12,7 @@ urlpatterns = [
 
     path('block-landlord-login/', views.LoginBlockLandlordAPIView.as_view(), name='login-api'),
     path('block-landlord-logout/', views.LogoutBlockLandlordAPIView.as_view(), name='user-logout-api'),
+    path('block-landlord-profile/', views.BlockLandlordProfileAPIView.as_view(), name='landlord-profile-api'),
     path('block-landlord-forgot-password/', views.ForgotPasswordBlockLandlordAPIView.as_view(), name='forgot-password-api'),
     path('block-landlord-verify-change-password/', views.VerifyChangePasswordBlockLandlordAPIView.as_view(), name='verify-change-password-api'),
     path('block-landlord-resend-otp/', views.ResendOtpPasswordBlockLandlordAPIView.as_view(), name='resend-otp'),

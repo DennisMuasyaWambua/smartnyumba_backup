@@ -1556,3 +1556,71 @@ class LandlordFinancialSummaryAPIView(APIView):
                 'status': False,
                 'message': f'Error fetching financial data: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class BlockLandlordProfileAPIView(APIView):
+    """
+    Get landlord profile with their properties
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            current_user = request.user
+
+            # Verify user is a landlord
+            if current_user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords can access this endpoint'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get landlord profile
+            landlord = BlockLandlord.objects.filter(user=current_user).first()
+            if not landlord:
+                return Response({
+                    'status': False,
+                    'message': 'Landlord profile not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Get landlord's properties
+            properties = landlord.property.all()
+            properties_data = []
+            for prop in properties:
+                # Count total houses for this property
+                total_houses = PropertyBlock.objects.filter(block=prop).count()
+                
+                properties_data.append({
+                    'id': prop.id,
+                    'block_number': prop.block_number,
+                    'location': prop.location,
+                    'total_houses': total_houses,
+                    'registration_date': prop.registration_date.isoformat() if prop.registration_date else None
+                })
+
+            return Response({
+                'status': True,
+                'message': 'Profile retrieved successfully',
+                'profile': {
+                    'user': {
+                        'first_name': current_user.first_name,
+                        'last_name': current_user.last_name,
+                        'email': current_user.email,
+                        'mobile_number': current_user.phone_number
+                    },
+                    'landlord': {
+                        'email': landlord.email,
+                        'phone_number': landlord.phone_number,
+                        'id_number': landlord.id_number,
+                        'is_active': landlord.is_active
+                    },
+                    'properties': properties_data
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': False,
+                'message': f'Error fetching profile: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

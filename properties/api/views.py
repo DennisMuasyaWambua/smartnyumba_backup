@@ -143,11 +143,14 @@ class AddBlockHousesAPIView(APIView):
                 }, status=status.HTTP_404_NOT_FOUND)
             
             rent_due_date = date.today() + timedelta(days=30)
+            annual_service_charge = float(service_charge) * 12  # Calculate annual from monthly
             PropertyBlock.objects.create(block=check_block_number,
                                         house_number=house_number,
                                         service_charge=service_charge,
+                                        annual_service_charge=annual_service_charge,
                                         rent_charged=rent_charged,
-                                        rent_due_date=rent_due_date)
+                                        rent_due_date=rent_due_date,
+                                        rent_charge_business_number=0)
 
 
             return Response({
