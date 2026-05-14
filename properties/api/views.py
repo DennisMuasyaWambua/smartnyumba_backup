@@ -213,7 +213,8 @@ class LandlordAddPropertyAPIView(APIView):
             # Create property
             new_property = Property.objects.create(
                 block_number=block_number,
-                location=location
+                location=location,
+                service_charge_business_number=0  # Default value
             )
 
             # Associate property with landlord
