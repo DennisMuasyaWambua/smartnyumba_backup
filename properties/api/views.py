@@ -301,3 +301,94 @@ class LandlordPropertiesListAPIView(APIView):
                 'status': False,
                 'message': 'Could not retrieve properties'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GetAvailableHousesAPIView(APIView):
+    """
+    Get available (unoccupied) houses for a specific property block.
+    Used when onboarding tenants to show only vacant houses.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            current_user = request.user
+
+            # Allow landlords and caretakers to access this
+            allowed_roles = ['landlord', 'caretaker']
+            if current_user.role.short_name not in allowed_roles:
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords and caretakers can access this resource'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get block_number from query params
+            block_number = request.GET.get('block_number')
+            if not block_number:
+                return Response({
+                    'status': False,
+                    'message': 'block_number query parameter is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if block exists
+            property_block = Property.objects.filter(block_number=block_number).first()
+            if not property_block:
+                return Response({
+                    'status': False,
+                    'message': f'Property block {block_number} not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # For landlords, verify they own this property
+            if current_user.role.short_name == 'landlord':
+                block_landlord = BlockLandlord.objects.filter(user=current_user).first()
+                if not block_landlord:
+                    return Response({
+                        'status': False,
+                        'message': 'Landlord profile not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+                # Check if this property belongs to the landlord
+                if property_block not in block_landlord.property.all():
+                    return Response({
+                        'status': False,
+                        'message': 'You do not have access to this property'
+                    }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get all houses in this property block
+            all_houses = PropertyBlock.objects.filter(block=property_block)
+
+            # Import Tenant model
+            from authentication.models import Tenant
+
+            # Get available houses (not occupied)
+            available_houses = []
+            for house in all_houses:
+                # Check if house is occupied
+                is_occupied = Tenant.objects.filter(PropertyBlock=house).exists()
+
+                if not is_occupied:
+                    available_houses.append({
+                        'id': house.id,
+                        'house_number': house.house_number,
+                        'service_charge': str(house.service_charge) if house.service_charge else '0',
+                        'rent_charged': str(house.rent_charged) if house.rent_charged else '0',
+                        'rent_due_date': house.rent_due_date
+                    })
+
+            return Response({
+                'status': True,
+                'block_number': block_number,
+                'available_houses': available_houses,
+                'total_available': len(available_houses),
+                'total_houses': all_houses.count()
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(str(e))
+            return Response({
+                'status': False,
+                'message': 'Could not retrieve available houses',
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)

@@ -8,4 +8,5 @@ urlpatterns = [
     # Landlord property management
     path('landlord-add-property/', views.LandlordAddPropertyAPIView.as_view(), name='landlord-add-property'),
     path('landlord-properties/', views.LandlordPropertiesListAPIView.as_view(), name='landlord-properties-list'),
+    path('available-houses/', views.GetAvailableHousesAPIView.as_view(), name='get-available-houses'),
 ]
