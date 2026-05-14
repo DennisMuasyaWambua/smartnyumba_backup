@@ -1602,10 +1602,10 @@ class BlockLandlordProfileAPIView(APIView):
                 'message': 'Profile retrieved successfully',
                 'profile': {
                     'user': {
-                        'first_name': current_user.first_name,
-                        'last_name': current_user.last_name,
+                        'first_name': current_user.firstName,
+                        'last_name': current_user.lastName,
                         'email': current_user.email,
-                        'mobile_number': current_user.phone_number
+                        'mobile_number': current_user.mobile_number
                     },
                     'landlord': {
                         'email': landlord.email,

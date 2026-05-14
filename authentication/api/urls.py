@@ -31,4 +31,7 @@ urlpatterns = [
 
     #-----LANDLORD SUBORDINATES--------#
     path('landlord-create-subordinate/', views.LandlordCreateSubordinateAPIView.as_view(), name='landlord-create-subordinate'),
+
+    #-----TENANT ONBOARDING--------#
+    path('landlord-onboard-tenant/', views.LandlordOnboardTenantAPIView.as_view(), name='landlord-onboard-tenant'),
 ]

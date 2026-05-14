@@ -2183,3 +2183,154 @@ class LandlordCreateSubordinateAPIView(APIVIEW):
                 'message': 'Sorry. We could not create subordinate',
                 'detail': str(error)
             }, status=status.HTTP_403_FORBIDDEN)
+
+
+class LandlordOnboardTenantAPIView(APIVIEW):
+    """
+    Endpoint for landlords and caretakers to onboard tenants directly.
+    Tenants are auto-activated and sent login credentials via email.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            # Verify user is landlord or caretaker
+            user_role = request.user.role.short_name
+            if user_role not in ['landlord', 'caretaker']:
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords and caretakers can onboard tenants'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Verify user is activated
+            if request.user.status != 1:
+                return Response({
+                    'status': False,
+                    'message': 'Your account must be activated to onboard tenants'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get tenant details
+            email = request.data.get('email')
+            first_name = request.data.get('first_name')
+            last_name = request.data.get('last_name')
+            mobile_number = request.data.get('mobile_number')
+            id_number = request.data.get('id_number')
+            block_number = request.data.get('block_number')
+            house_number = request.data.get('house_number')
+
+            # Validate required fields
+            if not all([email, first_name, last_name, mobile_number, id_number, block_number, house_number]):
+                return Response({
+                    'status': False,
+                    'message': 'All fields are required: email, first_name, last_name, mobile_number, id_number, block_number, house_number'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate email
+            email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            if not re.fullmatch(email_regex, email):
+                return Response({
+                    'status': False,
+                    'message': 'Provide a valid email'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if user already exists
+            check_user = User.objects.filter(email=email)
+            if check_user.exists():
+                return Response({
+                    'status': False,
+                    'message': 'User with this email already exists'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get tenant role
+            role = Role.objects.filter(short_name='tenant').first()
+            if not role:
+                return Response({
+                    'status': False,
+                    'message': 'Tenant role not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Validate block exists
+            block = Property.objects.filter(block_number=block_number).first()
+            if not block:
+                return Response({
+                    'status': False,
+                    'message': f'Property block {block_number} not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Validate house exists and is not occupied
+            property_block = PropertyBlock.objects.filter(
+                block=block,
+                house_number=house_number
+            ).first()
+
+            if not property_block:
+                return Response({
+                    'status': False,
+                    'message': f'House {house_number} not found in block {block_number}'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if house is already occupied
+            existing_tenant = Tenant.objects.filter(PropertyBlock=property_block).first()
+            if existing_tenant:
+                return Response({
+                    'status': False,
+                    'message': f'House {house_number} is already occupied'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            with transaction.atomic():
+                # Format phone number
+                phone_number = str(mobile_number)[-9:]
+                formatted_mobile = f'+254{phone_number}'
+
+                # Generate random password
+                password = random.randint(1111, 9999)
+
+                # Create User
+                user = User(
+                    email=email,
+                    username=email,
+                    firstName=first_name,
+                    lastName=last_name,
+                    role=role,
+                    mobile_number=formatted_mobile,
+                    status=1,  # Auto-activated
+                    is_active=True,
+                    is_staff=False
+                )
+                user.set_password(str(password))
+                user.save()
+
+                # Create Tenant profile
+                name = f'{first_name} {last_name}'
+                tenant = Tenant.objects.create(
+                    user=user,
+                    name=name,
+                    id_number=id_number,
+                    email=email,
+                    is_active=1,  # Auto-approved
+                    PropertyBlock=property_block
+                )
+
+                # Send credentials email
+                email_response = send_creation_email(email=email, password=password)
+
+                return Response({
+                    'status': True,
+                    'message': f'Tenant onboarded successfully. Login credentials sent to {email}.',
+                    'tenant_id': tenant.id,
+                    'email': email,
+                    'house_number': house_number,
+                    'block_number': block_number,
+                    'auto_generated_password': str(password),  # Include for confirmation
+                    'auto_activated': True
+                }, status=status.HTTP_200_OK)
+
+        except Exception as error:
+            import traceback
+            traceback.print_exc()
+            print(f'ERROR onboarding tenant: {str(error)}')
+            return Response({
+                'status': False,
+                'message': 'Sorry. We could not onboard tenant',
+                'detail': str(error)
+            }, status=status.HTTP_403_FORBIDDEN)
