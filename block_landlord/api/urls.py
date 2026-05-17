@@ -23,4 +23,7 @@ urlpatterns = [
 
     #---------------------Financial Dashboard -----------------------------------
     path('financial-summary/', views.LandlordFinancialSummaryAPIView.as_view(), name='landlord-financial-summary'),
+
+    #---------------------Landlord Transactions ---------------------------------
+    path('landlord-transactions/', views.LandlordTransactionsAPIView.as_view(), name='landlord-transactions'),
 ]

@@ -144,7 +144,7 @@ class PayServiceAPIView(APIView):
                 json_response = json.loads(response.text)
 
                 print(json_response)
-                
+
 
                 if response.status_code == 200:
                     service_instance, created = services.objects.get_or_create(
@@ -181,9 +181,11 @@ class PayServiceAPIView(APIView):
                         'message': 'Payment initiated'
                     }, status=status.HTTP_200_OK)
                 else:
+                    error_msg = json_response.get('errorMessage', json_response.get('ResponseDescription', 'MPesa payment configuration error'))
+                    print(f"MPesa STK Push failed: {error_msg}, Response: {json_response}")
                     return Response({
                         'status': False,
-                        'message': 'Configuration error!'
+                        'message': f'Payment gateway error: {error_msg}'
                     }, status=status.HTTP_400_BAD_REQUEST)
 
             # Card Payment Logic
@@ -724,10 +726,11 @@ class PayRentAPIView(APIView):
                         'MerchantRequestID': json_response.get('MerchantRequestID')
                     }, status=status.HTTP_200_OK)
                 else:
+                    error_msg = json_response.get('errorMessage', json_response.get('ResponseDescription', 'MPesa payment configuration error'))
+                    print(f"Rent MPesa STK Push failed: {error_msg}, Response: {json_response}")
                     return Response({
                         'status': False,
-                        'message': 'Payment initiation failed',
-                        'error': json_response
+                        'message': f'Payment gateway error: {error_msg}'
                     }, status=status.HTTP_400_BAD_REQUEST)
 
             # Card Payment Logic

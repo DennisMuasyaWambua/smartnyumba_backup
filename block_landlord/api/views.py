@@ -1624,3 +1624,96 @@ class BlockLandlordProfileAPIView(APIView):
                 'status': False,
                 'message': f'Error fetching profile: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class LandlordTransactionsAPIView(APIVIEW):
+    """
+    Get all transactions (rent and service charges) for landlord's properties.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            current_user = request.user
+
+            # Only landlords can access this
+            if current_user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords can access this resource'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get landlord profile
+            block_landlord = BlockLandlord.objects.filter(user=current_user).first()
+            if not block_landlord:
+                return Response({
+                    'status': False,
+                    'message': 'Landlord profile not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Get all properties owned by this landlord
+            properties = block_landlord.property.all()
+
+            # Import transaction models
+            from tenant_services.models import ServiceChargePayment, RentPayment
+            from authentication.models import Tenant
+
+            # Get all houses in landlord's properties
+            from properties.models import PropertyBlock
+            all_houses = PropertyBlock.objects.filter(block__in=properties)
+
+            # Get all tenants in these houses
+            tenants = Tenant.objects.filter(PropertyBlock__in=all_houses)
+
+            # Get rent payments
+            rent_transactions = []
+            rent_payments = RentPayment.objects.filter(tenant__in=tenants).order_by('-date_paid')
+
+            for payment in rent_payments:
+                rent_transactions.append({
+                    'id': payment.id,
+                    'amount': str(payment.amount),
+                    'date_paid': payment.date_paid.isoformat() if payment.date_paid else None,
+                    'payment_method': payment.payment_method,
+                    'tenant_email': payment.tenant.email if payment.tenant else None,
+                    'house_number': payment.tenant.PropertyBlock.house_number if payment.tenant and payment.tenant.PropertyBlock else None,
+                    'block_number': payment.tenant.PropertyBlock.block.block_number if payment.tenant and payment.tenant.PropertyBlock and payment.tenant.PropertyBlock.block else None,
+                    'transaction_reference': payment.transaction_reference if hasattr(payment, 'transaction_reference') else None,
+                })
+
+            # Get service charge payments
+            service_transactions = []
+            service_payments = ServiceChargePayment.objects.filter(tenant__in=tenants).order_by('-date')
+
+            for payment in service_payments:
+                service_transactions.append({
+                    'id': payment.id,
+                    'amount': str(payment.amount),
+                    'date': payment.date.isoformat() if payment.date else None,
+                    'payment_method': payment.payment_method,
+                    'tenant_email': payment.tenant.email if payment.tenant else None,
+                    'house_number': payment.tenant.PropertyBlock.house_number if payment.tenant and payment.tenant.PropertyBlock else None,
+                    'block_number': payment.tenant.PropertyBlock.block.block_number if payment.tenant and payment.tenant.PropertyBlock and payment.tenant.PropertyBlock.block else None,
+                    'transaction_reference': payment.transaction_reference if hasattr(payment, 'transaction_reference') else None,
+                })
+
+            return Response({
+                'status': True,
+                'rent_transactions': rent_transactions,
+                'service_transactions': service_transactions,
+                'total_rent_transactions': len(rent_transactions),
+                'total_service_transactions': len(service_transactions),
+                'total_properties': properties.count(),
+                'total_houses': all_houses.count(),
+                'total_tenants': tenants.count()
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(str(e))
+            return Response({
+                'status': False,
+                'message': 'Could not retrieve transactions',
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
