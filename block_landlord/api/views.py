@@ -1626,7 +1626,7 @@ class BlockLandlordProfileAPIView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class LandlordTransactionsAPIView(APIVIEW):
+class LandlordTransactionsAPIView(APIView):
     """
     Get all transactions (rent and service charges) for landlord's properties.
     """

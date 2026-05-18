@@ -18,5 +18,8 @@ urlpatterns = [
 
     #---------Pesapal Payment Endpoints-------------------
     path('pesapal/ipn/', views.PesapalIPNView.as_view(), name='pesapal-ipn'),
+    path('pesapal-callback/', views.PesapalIPNView.as_view(), name='pesapal-callback'),
+    path('pesapal-rent-callback/', views.PesapalIPNView.as_view(), name='pesapal-rent-callback'),
     path('check-payment-status/', views.CheckPaymentStatusAPIView.as_view(), name='check-payment-status'),
+    path('check-rent-payment-status/', views.CheckPaymentStatusAPIView.as_view(), name='check-rent-payment-status'),
 ]
