@@ -8,6 +8,6 @@ class AddPropertySerializer(serializers.Serializer):
 class AddBlockHousesSerializer(serializers.Serializer):
     house_number = serializers.CharField()
     block = serializers.CharField()
-    service_charge = serializers.DecimalField(decimal_places=2, max_digits=5)
+    service_charge = serializers.DecimalField(decimal_places=2, max_digits=10)
     rent_charged = serializers.DecimalField(decimal_places=2, max_digits=10)
 

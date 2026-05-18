@@ -16,11 +16,11 @@ class BlockLandlord(models.Model):
     phone_number = models.CharField(max_length=15)
     id_number = models.CharField(max_length=9)
     is_active = models.IntegerField(default=0)
-    approver = models.EmailField(null=False)
+    approver = models.EmailField(null=True, blank=True)
     property = models.ManyToManyField(Property, related_name='property')
 
     def __str__(self):
         return self.email
-    
+
     class Meta:
         db_table = 'block_landlord'

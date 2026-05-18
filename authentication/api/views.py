@@ -10,9 +10,17 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 
 from django.contrib.auth import get_user_model, authenticate
+from django.contrib.auth.hashers import make_password
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from authentication.models import LoginOTP, OtpVerificationCode, Role, Tenant, staffAdmin
-from email_service.email_service import send_forgot_password_otp, send_otp_message
+from block_landlord.models import BlockLandlord
+from staff_accounts.models import staffAccounts
+from caretaker.models import Caretaker
+from email_service.email_service import send_forgot_password_otp, send_otp_message, send_creation_email, approve_accounts_profile
 from properties.models import Property, PropertyBlock
+
+import logging
 
 
 User = get_user_model()
@@ -20,6 +28,7 @@ User = get_user_model()
 from authentication.api.serializers import AdminLogOutSerializer, AdminProfileSerializer, AllProperiesSerializer, ForgotPasswordSerializer, LoginSerializer, NewPasswordSerializer, ResendOtpSerializer, TenantProfileSerializer, UserLogOutSerializer, UserRegisterSerializer, UserRegisterVerificationSerializer, VerifyChangePasswordSerializer
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class AdminLoginAPIView(APIVIEW):
     serializer_class = LoginSerializer
 
@@ -167,10 +176,11 @@ class AdminLogoutAPIView(APIVIEW):
                 'message': 'Failed to logout'
             })
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ForgotPasswordAPIView(APIVIEW):
     authentication_classes=[]
     serializer_class = ForgotPasswordSerializer
-    
+
     def post(self, request):
         try:
             
@@ -205,7 +215,7 @@ class ForgotPasswordAPIView(APIVIEW):
             user = user.first()
             
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
             email_response = send_forgot_password_otp(email=user,otp=otp)
             
             
@@ -227,10 +237,11 @@ class ForgotPasswordAPIView(APIVIEW):
             }, status=status.HTTP_403_FORBIDDEN)
         
 
+@method_decorator(csrf_exempt, name='dispatch')
 class VerifyChangePasswordAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = VerifyChangePasswordSerializer
-    
+
     def post(self, request):
         try:
             
@@ -265,7 +276,7 @@ class VerifyChangePasswordAPIView(APIVIEW):
             user = user.first()
             
             verify_otp = OtpVerificationCode.objects.filter(
-                    email=user, validated=False)
+                    email=user.email, validated=False)
             if not verify_otp.exists():
                 return Response({
                     'status': False,
@@ -292,10 +303,11 @@ class VerifyChangePasswordAPIView(APIVIEW):
             }, status=status.HTTP_403_FORBIDDEN)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ResendOtpAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = ResendOtpSerializer
-    
+
     def post(self, request):
         try:
             data = request.data
@@ -328,7 +340,7 @@ class ResendOtpAPIView(APIVIEW):
             
             user = user.first()
             
-            verify_otp = OtpVerificationCode.objects.filter(email=user, validated=False)
+            verify_otp = OtpVerificationCode.objects.filter(email=user.email, validated=False)
             if not verify_otp.exists():
                 return Response({
                     'status': False,
@@ -339,7 +351,7 @@ class ResendOtpAPIView(APIVIEW):
             verify_otp.delete()
 
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
             email_response = send_forgot_password_otp(email=user,otp=otp)
             
             
@@ -362,6 +374,7 @@ class ResendOtpAPIView(APIVIEW):
                 'message': 'We could not send otp'
             }, status=status.HTTP_403_FORBIDDEN)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class NewPasswordAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = NewPasswordSerializer
@@ -427,12 +440,13 @@ class NewPasswordAPIView(APIVIEW):
         
 #----USER
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserRegisterAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = UserRegisterSerializer
-    
+
     def post(self, request):
-        
+
         try:
             serializer = self.serializer_class(data=request.data)
             if not serializer.is_valid():
@@ -441,101 +455,344 @@ class UserRegisterAPIView(APIVIEW):
                     'message': 'Invalid credentials provided.',
                     'detail': serializer.errors
                 })
+
+            # Check authentication requirement for non-tenant roles
+            role_name = request.data.get('role', 'tenant')
+
+            # Landlords can self-register (for activation payment flow)
+            # But accounts/caretaker must be created by authenticated landlords
+            if role_name in ['accounts', 'caretaker']:
+                if not request.user.is_authenticated:
+                    return Response({
+                        'status': False,
+                        'message': 'Authentication required for this role registration'
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+
+                # Only admins or landlords can create accounts/caretakers
+                current_user_role = request.user.role.short_name
+                if current_user_role not in ['admin', 'landlord']:
+                    return Response({
+                        'status': False,
+                        'message': 'Only admins or landlords can create accountants/caretakers'
+                    }, status=status.HTTP_403_FORBIDDEN)
+
             with transaction.atomic():
                 email = request.data.get('email')
-                first_name = request.data.get('first_name')
-                last_name = request.data.get('last_name')
                 id_number = request.data.get('id_number')
-                password = request.data.get('password')
                 mobile_number = request.data.get('mobile_number')
-                block_number = request.data.get('block_number')
-                house_number = request.data.get('house_number')
 
-                mobile_number = mobile_number[-9:]
-                mobile_number = f'+254{mobile_number}'
-
-                name = f'{first_name} {last_name}'
-
-                
-                if len(first_name) > 20:
-                    return Response ({
-                        'status': False,
-                        'message': 'Username too long'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
+                # Email validation
                 email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
                 valid_email = re.fullmatch(email_regex, email)
                 if not valid_email:
                     return Response({
                         'status': False,
-                        'message': 'Provide a valid email to login'
+                        'message': 'Provide a valid email'
                     }, status=status.HTTP_400_BAD_REQUEST)
-                
-                block = Property.objects.filter(block_number=block_number)
-                print(block)
 
-                if not block.exists():
-                    return Response({
-                        'status': False,
-                        'message': 'Block not found'
-                    }, status=status.HTTP_404_NOT_FOUND)
-                block = block.first()
-
-                property_block = PropertyBlock.objects.filter(block=block)
-
-                if not property_block.exists():
-                    return Response({
-                        'status': False,
-                        'message': 'Block property not found'
-                    }, status=status.HTTP_404_NOT_FOUND)
-                
+                # Check if user already exists
                 check_user = User.objects.filter(email=email)
                 if check_user.exists():
                     return Response({
                         'status': False,
                         'message': 'User with this email already registered.'
                     }, status=status.HTTP_403_FORBIDDEN)
-                tenant = 'tenant'
-                role = Role.objects.filter(short_name=tenant)
+
+                # Get role object
+                role = Role.objects.filter(short_name=role_name)
+                if not role.exists():
+                    return Response({
+                        'status': False,
+                        'message': f'Role {role_name} not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
                 role = role.first()
-                user = User(
+
+                # Branch based on role
+                if role_name == 'tenant':
+                    # TENANT REGISTRATION FLOW
+                    first_name = request.data.get('first_name')
+                    last_name = request.data.get('last_name')
+                    password = request.data.get('password')
+                    block_number = request.data.get('block_number')
+                    house_number = request.data.get('house_number')
+
+                    if len(first_name) > 20:
+                        return Response({
+                            'status': False,
+                            'message': 'Username too long'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    # Validate block and property
+                    block = Property.objects.filter(block_number=block_number)
+                    if not block.exists():
+                        return Response({
+                            'status': False,
+                            'message': 'Block not found'
+                        }, status=status.HTTP_404_NOT_FOUND)
+                    block = block.first()
+
+                    property_block = PropertyBlock.objects.filter(block=block)
+                    if not property_block.exists():
+                        return Response({
+                            'status': False,
+                            'message': 'Block property not found'
+                        }, status=status.HTTP_404_NOT_FOUND)
+                    property_block = property_block.first()
+
+                    # Format mobile number for tenant
+                    mobile_number = mobile_number[-9:]
+                    mobile_number = f'+254{mobile_number}'
+
+                    name = f'{first_name} {last_name}'
+
+                    # Create User
+                    user = User(
                         username=email,
                         first_name=first_name,
                         email=email,
                         role=role,
                         mobile_number=mobile_number,
                     )
-                print('user',user)
-                user.save()
-                user.set_password(password)
-                user.is_staff = False
-                user.is_active = False
-                user.status = 0
-                user.save()
-                print(block_number)
-                
-                property_block = property_block.first()
+                    user.save()
+                    user.set_password(password)
+                    user.is_staff = False
+                    user.is_active = False
+                    user.status = 0
+                    user.save()
 
-                tenant = Tenant.objects.create(user=user, name=name, id_number=id_number,  email=email, is_active=0, PropertyBlock=property_block)
-                print('Smart nyumba tenant created', tenant)
-                otp = random.randint(1111, 9999)
+                    # Create Tenant profile
+                    tenant = Tenant.objects.create(
+                        user=user,
+                        name=name,
+                        id_number=id_number,
+                        email=email,
+                        is_active=0,
+                        PropertyBlock=property_block
+                    )
 
-                email_response = send_otp_message(email=email,otp=otp)
+                    # Generate OTP and send to user
+                    otp = random.randint(1111, 9999)
+                    email_response = send_otp_message(email=email, otp=otp)
 
-                if not email_response:
+                    if not email_response:
+                        return Response({
+                            'status': False,
+                            'message': 'Error sending otp'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    LoginOTP.objects.create(mobile_number=user.mobile_number, otp=otp)
+
                     return Response({
-                        'status': False,
-                        'message': 'Error sending otp'
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                        'status': True,
+                        'message': 'Smart nyumba tenant created successfully'
+                    }, status=status.HTTP_200_OK)
 
-                body = f'Use otp {otp} to complete registration'
+                else:
+                    # NON-TENANT REGISTRATION FLOW (landlord, accounts, caretaker)
+                    phone_number = request.data.get('phone_number')
 
-                LoginOTP.objects.create(mobile_number=user.mobile_number, otp=otp)
-              
-                return Response({
-                    'status': True,
-                    'message': 'Smart nyumba tenant created successfully'
-                }, status=status.HTTP_200_OK)
+                    # Validate ID number length
+                    if len(str(id_number)) > 8:
+                        return Response({
+                            'status': False,
+                            'message': 'ID number cannot exceed 8 characters'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    # Format phone number for non-tenant
+                    phone_number = phone_number[-9:]
+                    mobile_number = f'254{phone_number}'
+
+                    # Generate random password
+                    password = random.randint(1111, 9999)
+                    encrypted_password = make_password(str(password))
+
+                    # Create User
+                    user = User(
+                        email=email,
+                        username=email,
+                        role=role,
+                        mobile_number=mobile_number,
+                        password=encrypted_password
+                    )
+                    user.is_active = False  # User inactive until OTP verified (and payment for landlords)
+                    user.status = 0
+                    user.save()
+
+                    # Create role-specific profile
+                    if role_name == 'landlord':
+                        # LANDLORD REGISTRATION - PAYMENT-BASED ACTIVATION
+                        location = request.data.get('location')
+                        block_number = request.data.get('block_number')
+
+                        # Create landlord profile
+                        profile = BlockLandlord.objects.create(
+                            user=user,
+                            email=email,
+                            phone_number=phone_number,
+                            id_number=id_number,
+                            approver=None,  # No approver needed for landlords
+                            is_active=0
+                        )
+
+                        # If location and block_number provided, create property
+                        if location and block_number:
+                            check_block = Property.objects.filter(block_number=block_number)
+                            if check_block.exists():
+                                return Response({
+                                    'status': False,
+                                    'message': 'Estate/Block with this name already exists'
+                                }, status=status.HTTP_400_BAD_REQUEST)
+
+                            # Generate business number
+                            business_number = random.randint(100000, 999999)
+                            new_property = Property.objects.create(
+                                block_number=block_number,
+                                location=location,
+                                service_charge_business_number=business_number
+                            )
+                            profile.property.add(new_property)
+
+                        # Get activation fee from config
+                        from authentication.models import SystemConfiguration, ActivationPayment
+                        config = SystemConfiguration.get_config()
+                        activation_fee = config.landlord_activation_fee
+
+                        # Create activation payment record
+                        ActivationPayment.objects.create(
+                            user=user,
+                            amount=activation_fee,
+                            payment_mode='pending',
+                            status=0
+                        )
+
+                        # Generate OTP for landlord verification (just like tenants)
+                        otp = random.randint(1111, 9999)
+                        email_response = send_otp_message(email=email, otp=otp)
+
+                        if not email_response:
+                            return Response({
+                                'status': False,
+                                'message': 'Error sending OTP'
+                            }, status=status.HTTP_400_BAD_REQUEST)
+
+                        # Store OTP for verification
+                        LoginOTP.objects.create(mobile_number=mobile_number, otp=otp)
+
+                        # Note: Credentials email removed - only OTP email is sent
+                        # Password can be reset if needed via forgot password flow
+
+                        return Response({
+                            'status': True,
+                            'message': f'Landlord account created. OTP sent to your email.',
+                            'user_id': user.id,
+                            'email': email,
+                            'activation_fee': float(activation_fee),
+                            'requires_payment': True
+                        }, status=status.HTTP_200_OK)
+
+                    elif role_name in ['accounts', 'caretaker']:
+                        # ACCOUNTS/CARETAKER REGISTRATION
+                        # Check who is creating this account
+                        creator_role = request.user.role.short_name
+
+                        if creator_role == 'landlord':
+                            # LANDLORD CREATING SUBORDINATE - AUTO-APPROVED
+
+                            # Create profile based on role
+                            if role_name == 'accounts':
+                                profile = staffAccounts.objects.create(
+                                    user=user,
+                                    email=email,
+                                    phone_number=phone_number,
+                                    id_number=id_number,
+                                    approver=request.user.email,  # Landlord is the approver
+                                    is_active=1  # Auto-approved
+                                )
+                            else:  # caretaker
+                                profile = Caretaker.objects.create(
+                                    user=user,
+                                    email=email,
+                                    phone_number=phone_number,
+                                    id_number=id_number,
+                                    approver=request.user.email,
+                                    is_active=1  # Auto-approved
+                                )
+
+                            # Activate user immediately
+                            user.status = 1
+                            user.is_active = True
+                            user.save()
+
+                            # Send credentials email
+                            email_response = send_creation_email(email=email, password=password)
+
+                            return Response({
+                                'status': True,
+                                'message': f'{role_name.capitalize()} created and activated successfully.',
+                                'email': email,
+                                'auto_approved': True
+                            }, status=status.HTTP_200_OK)
+
+                        elif creator_role == 'admin':
+                            # ADMIN CREATING - USE EXISTING APPROVAL FLOW
+
+                            approver = request.data.get('approver')
+
+                            # Validate approver email
+                            valid_approver_email = re.fullmatch(email_regex, approver)
+                            if not valid_approver_email:
+                                return Response({
+                                    'status': False,
+                                    'message': 'Provide a valid approver email'
+                                }, status=status.HTTP_400_BAD_REQUEST)
+
+                            # Validate approver exists
+                            check_approver = staffAdmin.objects.filter(email=approver)
+                            if not check_approver.exists():
+                                return Response({
+                                    'status': False,
+                                    'message': 'Approver not found in system'
+                                }, status=status.HTTP_404_NOT_FOUND)
+
+                            # Create profile based on role
+                            if role_name == 'accounts':
+                                profile = staffAccounts.objects.create(
+                                    user=user,
+                                    email=email,
+                                    phone_number=phone_number,
+                                    id_number=id_number,
+                                    approver=approver,
+                                    is_active=0
+                                )
+                            else:  # caretaker
+                                profile = Caretaker.objects.create(
+                                    user=user,
+                                    email=email,
+                                    phone_number=phone_number,
+                                    id_number=id_number,
+                                    approver=approver,
+                                    is_active=0
+                                )
+
+                            # Send password email to user
+                            email_response = send_creation_email(email=email, password=password)
+
+                            # Generate OTP and send to approver
+                            otp = random.randint(1111, 9999)
+                            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
+
+                            otp_email_response = approve_accounts_profile(otp=otp, email=approver, accounts_email=email)
+
+                            if not otp_email_response:
+                                return Response({
+                                    'status': False,
+                                    'message': 'Error sending approval OTP'
+                                }, status=status.HTTP_400_BAD_REQUEST)
+
+                            return Response({
+                                'status': True,
+                                'message': f'Smart nyumba {role_name} created successfully. Password sent to user, OTP sent to approver.'
+                            }, status=status.HTTP_200_OK)
                         
         except Exception as error:
             print('ERROR:', str(error))
@@ -545,10 +802,11 @@ class UserRegisterAPIView(APIVIEW):
                 'detail': str(error)
             }, status=status.HTTP_403_FORBIDDEN)
     
+@method_decorator(csrf_exempt, name='dispatch')
 class UserRegisterVerificationAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = UserRegisterVerificationSerializer
-    
+
     def post(self, request):
         try:
             serializer = self.serializer_class(data=request.data)
@@ -570,21 +828,19 @@ class UserRegisterVerificationAPIView(APIVIEW):
                 }, status=status.HTTP_404_NOT_FOUND)
             user = check_user.first()
             print(user)
+
+            # Get user's role
+            user_role = user.role.short_name if user.role else None
+            print(f"User role: {user_role}")
+
+            # Check if already activated
             if user.is_active:
                 return Response({
                     'status': False,
                     'message':'Account has already been activated'
                 }, status=status.HTTP_403_FORBIDDEN)
-            
-            role = Role.objects.filter(short_name='tenant')
-            if not role.exists():
-                return Response({
-                    'status': False,
-                    'message': 'Role not found.'
-                }, status=status.HTTP_404_NOT_FOUND)
-                
-            role = role.first()
-            print(role)
+
+            # Verify OTP
             print(user.mobile_number)
             login_otp = LoginOTP.objects.filter(mobile_number=user.mobile_number)
             if not login_otp.exists():
@@ -599,32 +855,61 @@ class UserRegisterVerificationAPIView(APIVIEW):
                     'message': 'OTP does not match.'
                 }, status=status.HTTP_403_FORBIDDEN)
 
-            smart_nyumba_user = Tenant.objects.filter(user=user)
-            if not smart_nyumba_user.exists():
+            # Handle verification based on role
+            if user_role == 'tenant':
+                # TENANT: Activate immediately after OTP verification
+                smart_nyumba_user = Tenant.objects.filter(user=user)
+                if not smart_nyumba_user.exists():
+                    return Response({
+                        'status': False,
+                        'message': 'Tenant user profile not found.'
+                    }, status=status.HTTP_404_NOT_FOUND)
+                smart_nyumba_user = smart_nyumba_user.first()
+                print(smart_nyumba_user)
+                smart_nyumba_user.is_active=1
+                smart_nyumba_user.save()
+                user.status=1
+                user.is_active=1
+                user.save()
+                return Response({
+                    'status': True,
+                    'message': 'Account activated. Navigate to login',
+                }, status=status.HTTP_200_OK)
+
+            elif user_role == 'landlord':
+                # LANDLORD: OTP verified but NOT activated yet (needs payment)
+                # Just mark OTP as validated, user stays inactive until payment
+                landlord = BlockLandlord.objects.filter(user=user)
+                if not landlord.exists():
+                    return Response({
+                        'status': False,
+                        'message': 'Landlord profile not found.'
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+                # Mark OTP as validated by deleting it
+                login_otp.delete()
+
+                return Response({
+                    'status': True,
+                    'message': 'OTP verified. Please complete payment to activate your account.',
+                    'requires_payment': True
+                }, status=status.HTTP_200_OK)
+
+            else:
                 return Response({
                     'status': False,
-                    'message': 'Arronax user profile not found.'
-                }, status=status.HTTP_404_NOT_FOUND)
-            smart_nyumba_user = smart_nyumba_user.first()
-            print(smart_nyumba_user)
-            smart_nyumba_user.is_active=1
-            smart_nyumba_user.save()
-            user.status=1
-            user.role = role
-            user.is_active=1
-            user.save()
-            return Response({
-                'status': True,
-                'message': 'Account activated. Navigate to login',
-            }, status=status.HTTP_200_OK)
-            
+                    'message': f'OTP verification not supported for role: {user_role}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
         except Exception as error:
             print(str(error))
             return Response({
                 'status': False,
-                'message': 'Couldnt be able to send otp'
+                'message': 'Could not verify OTP',
+                'detail': str(error)
             }, status=status.HTTP_403_FORBIDDEN)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserLoginAPIView(APIVIEW):
     serializer_class = LoginSerializer
 
@@ -774,10 +1059,11 @@ class UserLogoutAPIView(APIVIEW):
                 'message': 'Failed to logout'
             })
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserForgotPasswordAPIView(APIVIEW):
     authentication_classes=[]
     serializer_class = ForgotPasswordSerializer
-    
+
     def post(self, request):
         try:
             
@@ -812,7 +1098,7 @@ class UserForgotPasswordAPIView(APIVIEW):
             user = user.first()
             
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
             email_response = send_forgot_password_otp(email=user,otp=otp)
             
             
@@ -834,10 +1120,11 @@ class UserForgotPasswordAPIView(APIVIEW):
             }, status=status.HTTP_403_FORBIDDEN)
         
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserVerifyChangePasswordAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = VerifyChangePasswordSerializer
-    
+
     def post(self, request):
         try:
             
@@ -872,7 +1159,7 @@ class UserVerifyChangePasswordAPIView(APIVIEW):
             user = user.first()
             
             verify_otp = OtpVerificationCode.objects.filter(
-                    email=user, validated=False)
+                    email=user.email, validated=False)
             if not verify_otp.exists():
                 return Response({
                     'status': False,
@@ -899,10 +1186,11 @@ class UserVerifyChangePasswordAPIView(APIVIEW):
             }, status=status.HTTP_403_FORBIDDEN)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserResendOtpAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = ResendOtpSerializer
-    
+
     def post(self, request):
         try:
             data = request.data
@@ -935,7 +1223,7 @@ class UserResendOtpAPIView(APIVIEW):
             
             user = user.first()
             
-            verify_otp = OtpVerificationCode.objects.filter(email=user, validated=False)
+            verify_otp = OtpVerificationCode.objects.filter(email=user.email, validated=False)
             if not verify_otp.exists():
                 return Response({
                     'status': False,
@@ -946,7 +1234,7 @@ class UserResendOtpAPIView(APIVIEW):
             verify_otp.delete()
 
             otp = random.randint(1111, 9999)
-            OtpVerificationCode.objects.create(email=user, otp=otp, validated=False)
+            OtpVerificationCode.objects.create(email=user.email, otp=otp, validated=False)
             email_response = send_forgot_password_otp(email=user,otp=otp)
             
             
@@ -969,6 +1257,7 @@ class UserResendOtpAPIView(APIVIEW):
                 'message': 'We could not send otp'
             }, status=status.HTTP_403_FORBIDDEN)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserNewPasswordAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = NewPasswordSerializer
@@ -1114,6 +1403,7 @@ class AdminProfileAPIView(APIVIEW):
                 'message': 'Could not view tenant profile'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+@method_decorator(csrf_exempt, name='dispatch')
 class AllPropertiesAPIView(APIVIEW):
     authentication_classes = []
     serializer_class = AllProperiesSerializer
@@ -1132,4 +1422,915 @@ class AllPropertiesAPIView(APIVIEW):
         except IntegrityError as e:
             print("An integrity error occured")
 
-        
+
+@method_decorator(csrf_exempt, name='dispatch')
+class InitiateActivationPaymentAPIView(APIVIEW):
+    """
+    Initiates Pesapal payment for landlord activation fee.
+    Can be called during registration or later for retry.
+    """
+    authentication_classes = []
+
+    def post(self, request):
+        try:
+            email = request.data.get('email')
+            mobile_number = request.data.get('mobile_number')
+            first_name = request.data.get('first_name', '')
+            last_name = request.data.get('last_name', '')
+
+            # Validate email
+            email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            if not re.fullmatch(email_regex, email):
+                return Response({
+                    'status': False,
+                    'message': 'Provide a valid email'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get user
+            user = User.objects.filter(email=email).first()
+            if not user:
+                return Response({
+                    'status': False,
+                    'message': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Verify user is landlord
+            if user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords require activation payment'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if already activated
+            if user.status == 1:
+                return Response({
+                    'status': False,
+                    'message': 'Account already activated'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get or create activation payment record
+            from authentication.models import ActivationPayment, SystemConfiguration, ActivationTransaction
+            config = SystemConfiguration.get_config()
+            activation_fee = config.landlord_activation_fee
+
+            activation_payment, created = ActivationPayment.objects.get_or_create(
+                user=user,
+                defaults={
+                    'amount': activation_fee,
+                    'payment_mode': 'pesapal',
+                    'status': 0
+                }
+            )
+
+            # If payment already completed, don't allow retry
+            if activation_payment.status == 1:
+                return Response({
+                    'status': False,
+                    'message': 'Activation payment already completed'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Format mobile number (Pesapal format: 254XXXXXXXXX or +254XXXXXXXXX)
+            if mobile_number:
+                mobile_number = mobile_number.replace('+', '').replace(' ', '')
+                if mobile_number.startswith('0'):
+                    mobile_number = '254' + mobile_number[1:]
+                elif mobile_number.startswith('254'):
+                    pass  # Already in correct format
+                elif len(mobile_number) == 9:
+                    mobile_number = '254' + mobile_number
+            else:
+                mobile_number = user.mobile_number.replace('+', '').replace(' ', '')
+                if mobile_number.startswith('0'):
+                    mobile_number = '254' + mobile_number[1:]
+
+            # Update payment mode
+            activation_payment.payment_mode = 'pesapal'
+            activation_payment.save()
+
+            # INITIATE PESAPAL PAYMENT
+            from utils.pesapal_service import submit_order, PesapalException
+            from django.conf import settings
+            from decimal import Decimal
+
+            # Generate unique merchant reference
+            import uuid
+            merchant_reference = f"ACTIVATION-{user.id}-{uuid.uuid4().hex[:8]}"
+
+            # Prepare billing address
+            billing_address = {
+                "phone_number": mobile_number,
+                "email_address": email,
+                "country_code": "KE",
+                "first_name": first_name or user.first_name or "Landlord",
+                "middle_name": "",
+                "last_name": last_name or user.last_name or "User",
+                "line_1": "",
+                "line_2": "",
+                "city": "",
+                "state": "",
+                "postal_code": "",
+                "zip_code": ""
+            }
+
+            # Redirect URL - where user is sent after payment (deep link to app)
+            callback_url = "smartnyumba://payment-complete?type=activation"
+
+            # IPN URL - where Pesapal sends payment notifications (must be HTTPS backend URL)
+            ipn_url = "https://api.smartnyumba.tech/apps/api/v1/auth/activation-pesapal-callback/"
+
+            # Submit order to Pesapal
+            # try:
+            pesapal_response = submit_order(
+                merchant_reference=merchant_reference,
+                amount=Decimal(str(activation_fee)),
+                description=f"Landlord Activation Fee for {email}",
+                callback_url=callback_url,
+                currency='KES',
+                billing_address=billing_address,
+                ipn_url=ipn_url
+            )
+            logging.info(f"Pesapal response for activation payment: {pesapal_response}")
+
+            # Create transaction record
+            ActivationTransaction.objects.create(
+                activation_payment=activation_payment,
+                MerchantRequestID=pesapal_response.get('order_tracking_id'),
+                CheckoutRequestID=merchant_reference,
+                PhoneNumber=mobile_number,
+                status=0  # Pending
+            )
+
+            return Response({
+                'status': True,
+                'message': 'Please complete payment in the checkout page',
+                'redirect_url': pesapal_response.get('redirect_url'),
+                'order_tracking_id': pesapal_response.get('order_tracking_id'),
+                'merchant_reference': merchant_reference,
+                'amount': float(activation_fee)
+            }, status=status.HTTP_200_OK)
+
+            # except PesapalException as e:
+            #     print(f"Pesapal payment error: {str(e)}")
+            #     return Response({
+            #         'status': False,
+            #         'message': 'Payment initiation failed. Please try again later.',
+            #         'error': str(e)
+            #     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            print(f"Activation payment error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': False,
+                'message': 'Could not initiate payment'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ActivationMpesaCallBackAPIView(APIVIEW):
+    """
+    Handles M-Pesa callback for activation payments.
+    Similar to RentMpesaCallBackAPIView but simpler (no B2C payout).
+    """
+    authentication_classes = []
+
+    def post(self, request):
+        data = request.data
+        print("Activation M-Pesa Callback Data:", data)
+
+        try:
+            result_code = data['Body']['stkCallback']['ResultCode']
+            merchant_request_id = data['Body']['stkCallback']['MerchantRequestID']
+            checkout_request_id = data['Body']['stkCallback']['CheckoutRequestID']
+
+            # Get transaction
+            from authentication.models import ActivationTransaction
+            transaction = ActivationTransaction.objects.filter(
+                MerchantRequestID=merchant_request_id,
+                CheckoutRequestID=checkout_request_id
+            ).first()
+
+            if not transaction:
+                print(f"Transaction not found: {merchant_request_id}")
+                return Response({
+                    'status': False,
+                    'message': 'Transaction not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Store result
+            transaction.ResultCode = str(result_code)
+            transaction.ResultDesc = data['Body']['stkCallback'].get('ResultDesc', '')
+
+            if result_code == 0:
+                # PAYMENT SUCCESSFUL
+                print(f"Activation payment successful: {merchant_request_id}")
+
+                # Extract callback metadata
+                callback_metadata = data['Body']['stkCallback'].get('CallbackMetadata', {})
+                items = callback_metadata.get('Item', [])
+
+                for item in items:
+                    if item['Name'] == 'MpesaReceiptNumber':
+                        transaction.MpesaReceiptNumber = item['Value']
+                    elif item['Name'] == 'TransactionDate':
+                        transaction.TransactionDate = str(item['Value'])
+
+                # Update transaction status
+                import datetime
+                transaction.status = 1
+                transaction.platform_earnings = transaction.activation_payment.amount
+                transaction.date_completed = datetime.datetime.now()
+                transaction.save()
+
+                # Update activation payment
+                activation_payment = transaction.activation_payment
+                activation_payment.status = 1
+                activation_payment.completed_at = datetime.datetime.now()
+                activation_payment.save()
+
+                # ACTIVATE USER IMMEDIATELY
+                user = activation_payment.user
+                user.status = 1  # Activated
+                user.is_active = True
+                user.save()
+
+                # Also activate landlord profile
+                landlord_profile = BlockLandlord.objects.filter(user=user).first()
+                if landlord_profile:
+                    landlord_profile.is_active = 1
+                    landlord_profile.save()
+
+                print(f"User {user.email} activated successfully!")
+
+                return Response({
+                    'status': True,
+                    'message': 'Activation payment successful. Account activated.'
+                }, status=status.HTTP_200_OK)
+
+            else:
+                # PAYMENT FAILED
+                print(f"Activation payment failed: {result_code} - {transaction.ResultDesc}")
+                transaction.status = 2
+                transaction.save()
+
+                activation_payment = transaction.activation_payment
+                activation_payment.status = 2  # Failed
+                activation_payment.save()
+
+                return Response({
+                    'status': False,
+                    'message': f'Payment failed: {transaction.ResultDesc}'
+                }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Activation callback error: {str(e)}")
+            return Response({
+                'status': False,
+                'message': 'Callback processing error'
+            }, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ActivationPesapalCallBackAPIView(APIVIEW):
+    """
+    Handles Pesapal IPN callback for activation payments.
+    Processes payment completion and activates landlord accounts.
+    """
+    authentication_classes = []
+
+    def get(self, request):
+        """Handle GET IPN from Pesapal"""
+        order_tracking_id = request.GET.get('OrderTrackingId')
+        return self.process_ipn(order_tracking_id)
+
+    def post(self, request):
+        """Handle POST IPN from Pesapal"""
+        order_tracking_id = request.data.get('OrderTrackingId') or request.GET.get('OrderTrackingId')
+        return self.process_ipn(order_tracking_id)
+
+    def process_ipn(self, order_tracking_id):
+        """Process IPN notification from Pesapal"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            logger.info(f"Processing Pesapal IPN for activation: order_tracking_id={order_tracking_id}")
+
+            if not order_tracking_id:
+                return Response({
+                    'status': 'error',
+                    'message': 'OrderTrackingId missing'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Query Pesapal for authoritative transaction status
+            from utils.pesapal_service import get_transaction_status, PesapalException
+
+            try:
+                pesapal_status = get_transaction_status(order_tracking_id)
+            except PesapalException as e:
+                logger.error(f"Failed to query Pesapal status: {str(e)}")
+                return Response({
+                    'status': 'error',
+                    'message': 'Failed to query payment status'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            logger.info(f"Pesapal status: {pesapal_status['status']}")
+
+            # Find transaction by order_tracking_id
+            from authentication.models import ActivationTransaction
+            transaction = ActivationTransaction.objects.filter(
+                MerchantRequestID=order_tracking_id
+            ).first()
+
+            if not transaction:
+                logger.warning(f"Transaction not found for order_tracking_id: {order_tracking_id}")
+                return Response({
+                    'status': 'error',
+                    'message': 'Transaction not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if already processed to prevent duplicate processing
+            if transaction.status == 1:
+                logger.info(f"Transaction {transaction.id} already completed, skipping")
+                return Response({
+                    'status': 'ok',
+                    'message': 'IPN already processed'
+                }, status=status.HTTP_200_OK)
+
+            # Process based on Pesapal status
+            if pesapal_status['status'] == 'COMPLETED':
+                # PAYMENT SUCCESSFUL
+                import datetime
+                logger.info(f"Marking activation transaction {transaction.id} as COMPLETED")
+
+                # Update transaction
+                transaction.status = 1  # Completed
+                transaction.ResultCode = '0'
+                transaction.ResultDesc = 'Payment successful'
+                transaction.MpesaReceiptNumber = pesapal_status.get('confirmation_code', '')
+                transaction.platform_earnings = transaction.activation_payment.amount
+                transaction.date_completed = datetime.datetime.now()
+                transaction.save()
+
+                # Update activation payment
+                activation_payment = transaction.activation_payment
+                activation_payment.status = 1  # Completed
+                activation_payment.completed_at = datetime.datetime.now()
+                activation_payment.save()
+
+                # ACTIVATE USER IMMEDIATELY
+                user = activation_payment.user
+                user.status = 1  # Activated
+                user.is_active = True
+                user.save()
+
+                # Also activate landlord profile
+                from block_landlord.models import BlockLandlord
+                landlord_profile = BlockLandlord.objects.filter(user=user).first()
+                if landlord_profile:
+                    landlord_profile.is_active = 1
+                    landlord_profile.save()
+
+                logger.info(f"User {user.email} activated successfully via Pesapal!")
+
+                return Response({
+                    'status': 'ok',
+                    'message': 'Activation payment successful. Account activated.'
+                }, status=status.HTTP_200_OK)
+
+            elif pesapal_status['status'] == 'FAILED':
+                # PAYMENT FAILED
+                logger.warning(f"Marking activation transaction {transaction.id} as FAILED")
+
+                transaction.status = 2  # Failed
+                transaction.ResultCode = str(pesapal_status.get('payment_status_code', 2))
+                transaction.ResultDesc = pesapal_status.get('payment_status_description', 'Payment failed')
+                transaction.save()
+
+                activation_payment = transaction.activation_payment
+                activation_payment.status = 2  # Failed
+                activation_payment.save()
+
+                return Response({
+                    'status': 'ok',
+                    'message': 'Payment failed'
+                }, status=status.HTTP_200_OK)
+
+            elif pesapal_status['status'] == 'CANCELLED':
+                # PAYMENT CANCELLED
+                logger.info(f"Marking activation transaction {transaction.id} as CANCELLED")
+
+                transaction.status = 3  # Cancelled
+                transaction.ResultCode = '3'
+                transaction.ResultDesc = 'Payment cancelled by user'
+                transaction.save()
+
+                activation_payment = transaction.activation_payment
+                activation_payment.status = 3  # Cancelled
+                activation_payment.save()
+
+                return Response({
+                    'status': 'ok',
+                    'message': 'Payment cancelled'
+                }, status=status.HTTP_200_OK)
+
+            else:
+                # PENDING or unknown status - don't update yet
+                logger.info(f"Transaction {transaction.id} still pending")
+                return Response({
+                    'status': 'ok',
+                    'message': 'Payment still pending'
+                }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Activation Pesapal callback error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': 'error',
+                'message': 'Callback processing error'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CheckActivationStatusAPIView(APIVIEW):
+    """
+    Check if landlord has paid activation fee and account is activated.
+    Used by login flow to redirect to payment if needed.
+    """
+    authentication_classes = []
+
+    def post(self, request):
+        try:
+            email = request.data.get('email')
+
+            # Validate email
+            email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            if not re.fullmatch(email_regex, email):
+                return Response({
+                    'status': False,
+                    'message': 'Provide a valid email'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get user
+            user = User.objects.filter(email=email).first()
+            if not user:
+                return Response({
+                    'status': False,
+                    'message': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if landlord
+            if user.role.short_name != 'landlord':
+                # Non-landlords don't need activation payment
+                return Response({
+                    'status': True,
+                    'message': 'Not a landlord account',
+                    'activation_status': 1 if user.status == 1 else 0
+                }, status=status.HTTP_200_OK)
+
+            # Get activation payment
+            from authentication.models import ActivationPayment, SystemConfiguration
+            activation_payment = ActivationPayment.objects.filter(user=user).first()
+
+            if not activation_payment:
+                # No payment record (shouldn't happen, but handle gracefully)
+                config = SystemConfiguration.get_config()
+                return Response({
+                    'status': True,
+                    'message': 'Payment not initiated',
+                    'activation_status': 0,  # pending
+                    'activation_fee': str(config.landlord_activation_fee)
+                }, status=status.HTTP_200_OK)
+
+            # Map activation_payment.status to activation_status
+            # activation_payment.status: 0=pending, 1=completed, 2=failed
+            # activation_status: 0=pending, 1=completed, 2=failed (same mapping)
+            return Response({
+                'status': True,
+                'message': 'Activation status retrieved',
+                'activation_status': activation_payment.status,
+                'activation_fee': str(activation_payment.amount)
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Check activation error: {str(e)}")
+            return Response({
+                'status': False,
+                'message': 'Could not check activation status'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class LandlordLoginAPIView(APIVIEW):
+    """
+    Landlord login endpoint with activation check.
+    Similar to UserLoginAPIView but for landlords with payment requirement.
+    """
+    authentication_classes = []
+    serializer_class = LoginSerializer
+
+    def post(self, request):
+        try:
+            data = request.data
+            serializer = self.serializer_class(data=data)
+
+            if not serializer.is_valid():
+                return Response({
+                    'status': False,
+                    'message': 'Invalid data provided',
+                    'error': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            email = request.data.get('email')
+            password = request.data.get('password')
+
+            email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            valid_email = re.fullmatch(email_regex, email)
+            if not valid_email:
+                return Response({
+                    'status': False,
+                    'message': 'Provide a valid email to login'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.filter(email=email).first()
+            if not user:
+                return Response({
+                    'status': False,
+                    'message': 'User does not exist'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check role
+            if user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Use correct login endpoint for your role'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # CHECK ACTIVATION STATUS
+            if user.status == 0:
+                # Not activated - check payment status
+                from authentication.models import ActivationPayment, SystemConfiguration
+                activation_payment = ActivationPayment.objects.filter(user=user).first()
+
+                config = SystemConfiguration.get_config()
+                activation_fee = config.landlord_activation_fee
+
+                if not activation_payment or activation_payment.status != 1:
+                    return Response({
+                        'status': False,
+                        'message': 'Account not activated. Please complete payment.',
+                        'requires_payment': True,
+                        'activation_fee': float(activation_fee),
+                        'user_id': user.id,
+                        'email': email
+                    }, status=status.HTTP_402_PAYMENT_REQUIRED)
+
+            if user.status == 2:
+                return Response({
+                    'status': False,
+                    'message': 'Account rejected. Contact admin.'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            if user.status == 3:
+                return Response({
+                    'status': False,
+                    'message': 'Account suspended. Contact admin.'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Authenticate
+            user = authenticate(username=email, password=password)
+            if user is None:
+                return Response({
+                    'status': False,
+                    'message': 'Invalid credentials'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+
+            # Generate tokens
+            refresh = RefreshToken.for_user(user)
+
+            return Response({
+                'status': True,
+                'message': 'Login successful',
+                'access_token': str(refresh.access_token),
+                'role': user.role.short_name,
+                'expires_in': '3600',
+                'token_type': 'Bearer'
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Landlord login error: {str(e)}")
+            return Response({
+                'status': False,
+                'message': 'Login failed'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LandlordCreateSubordinateAPIView(APIVIEW):
+    """
+    Dedicated endpoint for landlords to create accountants and caretakers.
+    Subordinates are auto-approved and assigned to all landlord's properties.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            # Verify user is landlord
+            if request.user.role.short_name != 'landlord':
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords can create subordinates'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Verify landlord is activated
+            if request.user.status != 1:
+                return Response({
+                    'status': False,
+                    'message': 'Your account must be activated to create subordinates'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get subordinate details
+            email = request.data.get('email')
+            first_name = request.data.get('first_name')
+            last_name = request.data.get('last_name')
+            mobile_number = request.data.get('mobile_number')
+            id_number = request.data.get('id_number')
+            role_name = request.data.get('role')  # 'accounts' or 'caretaker'
+
+            # Validate required fields
+            if not all([email, first_name, last_name, mobile_number, id_number, role_name]):
+                return Response({
+                    'status': False,
+                    'message': 'All fields are required: email, first_name, last_name, mobile_number, id_number, role'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate role
+            if role_name not in ['accounts', 'caretaker']:
+                return Response({
+                    'status': False,
+                    'message': 'Role must be either "accounts" or "caretaker"'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate email
+            email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            if not re.fullmatch(email_regex, email):
+                return Response({
+                    'status': False,
+                    'message': 'Provide a valid email'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if user already exists
+            check_user = User.objects.filter(email=email)
+            if check_user.exists():
+                return Response({
+                    'status': False,
+                    'message': 'User with this email already exists'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get role object
+            role = Role.objects.filter(short_name=role_name).first()
+            if not role:
+                return Response({
+                    'status': False,
+                    'message': f'Role {role_name} not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Validate ID number length
+            if len(str(id_number)) > 8:
+                return Response({
+                    'status': False,
+                    'message': 'ID number cannot exceed 8 characters'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            with transaction.atomic():
+                # Format phone number
+                phone_number = str(mobile_number)[-9:]
+                formatted_mobile = f'254{phone_number}'
+
+                # Generate random password
+                password = random.randint(1111, 9999)
+                encrypted_password = make_password(str(password))
+
+                # Create User
+                user = User(
+                    email=email,
+                    username=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    role=role,
+                    mobile_number=formatted_mobile,
+                    password=encrypted_password,
+                    status=1,  # Auto-activated
+                    is_active=True
+                )
+                user.save()
+
+                # Create profile based on role
+                if role_name == 'accounts':
+                    profile = staffAccounts.objects.create(
+                        user=user,
+                        email=email,
+                        phone_number=phone_number,
+                        id_number=id_number,
+                        approver=request.user.email,  # Landlord is the approver
+                        is_active=1  # Auto-approved
+                    )
+                else:  # caretaker
+                    profile = Caretaker.objects.create(
+                        user=user,
+                        email=email,
+                        phone_number=phone_number,
+                        id_number=id_number,
+                        approver=request.user.email,
+                        is_active=1  # Auto-approved
+                    )
+
+                # Auto-assign to all landlord's properties
+                landlord_profile = BlockLandlord.objects.filter(user=request.user).first()
+                if landlord_profile:
+                    landlord_properties = landlord_profile.property.all()
+
+                    # Associate subordinate with all properties
+                    # Note: This depends on your property-subordinate relationship model
+                    # You may need to adjust this based on your actual models
+                    if role_name == 'accounts':
+                        # If staffAccounts has a property relationship
+                        if hasattr(profile, 'properties'):
+                            profile.properties.set(landlord_properties)
+                    else:
+                        # If Caretaker has a property relationship
+                        if hasattr(profile, 'properties'):
+                            profile.properties.set(landlord_properties)
+
+                # Send credentials email
+                email_response = send_creation_email(email=email, password=password)
+
+                return Response({
+                    'status': True,
+                    'message': f'{role_name.capitalize()} created successfully. Password sent to {email}.',
+                    'user_id': user.id,
+                    'email': email,
+                    'auto_generated_password': str(password),  # Include in response for confirmation
+                    'auto_approved': True,
+                    'assigned_properties': landlord_properties.count() if landlord_profile else 0
+                }, status=status.HTTP_200_OK)
+
+        except Exception as error:
+            print(f'ERROR creating subordinate: {str(error)}')
+            return Response({
+                'status': False,
+                'message': 'Sorry. We could not create subordinate',
+                'detail': str(error)
+            }, status=status.HTTP_403_FORBIDDEN)
+
+
+class LandlordOnboardTenantAPIView(APIVIEW):
+    """
+    Endpoint for landlords and caretakers to onboard tenants directly.
+    Tenants are auto-activated and sent login credentials via email.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            # Verify user is landlord or caretaker
+            user_role = request.user.role.short_name
+            if user_role not in ['landlord', 'caretaker']:
+                return Response({
+                    'status': False,
+                    'message': 'Only landlords and caretakers can onboard tenants'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Verify user is activated
+            if request.user.status != 1:
+                return Response({
+                    'status': False,
+                    'message': 'Your account must be activated to onboard tenants'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get tenant details
+            email = request.data.get('email')
+            first_name = request.data.get('first_name')
+            last_name = request.data.get('last_name')
+            mobile_number = request.data.get('mobile_number')
+            id_number = request.data.get('id_number')
+            block_number = request.data.get('block_number')
+            house_number = request.data.get('house_number')
+
+            # Validate required fields
+            if not all([email, first_name, last_name, mobile_number, id_number, block_number, house_number]):
+                return Response({
+                    'status': False,
+                    'message': 'All fields are required: email, first_name, last_name, mobile_number, id_number, block_number, house_number'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate email
+            email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            if not re.fullmatch(email_regex, email):
+                return Response({
+                    'status': False,
+                    'message': 'Provide a valid email'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if user already exists
+            check_user = User.objects.filter(email=email)
+            if check_user.exists():
+                return Response({
+                    'status': False,
+                    'message': 'User with this email already exists'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get tenant role
+            role = Role.objects.filter(short_name='tenant').first()
+            if not role:
+                return Response({
+                    'status': False,
+                    'message': 'Tenant role not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Validate block exists
+            block = Property.objects.filter(block_number=block_number).first()
+            if not block:
+                return Response({
+                    'status': False,
+                    'message': f'Property block {block_number} not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Validate house exists and is not occupied
+            property_block = PropertyBlock.objects.filter(
+                block=block,
+                house_number=house_number
+            ).first()
+
+            if not property_block:
+                return Response({
+                    'status': False,
+                    'message': f'House {house_number} not found in block {block_number}'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if house is already occupied
+            existing_tenant = Tenant.objects.filter(PropertyBlock=property_block).first()
+            if existing_tenant:
+                return Response({
+                    'status': False,
+                    'message': f'House {house_number} is already occupied'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            with transaction.atomic():
+                # Format phone number
+                phone_number = str(mobile_number)[-9:]
+                formatted_mobile = f'+254{phone_number}'
+
+                # Generate random password
+                password = random.randint(1111, 9999)
+
+                # Create User
+                user = User(
+                    email=email,
+                    username=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    role=role,
+                    mobile_number=formatted_mobile,
+                    status=1,  # Auto-activated
+                    is_active=True,
+                    is_staff=False
+                )
+                user.set_password(str(password))
+                user.save()
+
+                # Create Tenant profile
+                name = f'{first_name} {last_name}'
+                tenant = Tenant.objects.create(
+                    user=user,
+                    name=name,
+                    id_number=id_number,
+                    email=email,
+                    is_active=1,  # Auto-approved
+                    PropertyBlock=property_block
+                )
+
+                # Send credentials email
+                email_response = send_creation_email(email=email, password=password)
+
+                return Response({
+                    'status': True,
+                    'message': f'Tenant onboarded successfully. Login credentials sent to {email}.',
+                    'tenant_id': tenant.id,
+                    'email': email,
+                    'house_number': house_number,
+                    'block_number': block_number,
+                    'auto_generated_password': str(password),  # Include for confirmation
+                    'auto_activated': True
+                }, status=status.HTTP_200_OK)
+
+        except Exception as error:
+            import traceback
+            traceback.print_exc()
+            print(f'ERROR onboarding tenant: {str(error)}')
+            return Response({
+                'status': False,
+                'message': 'Sorry. We could not onboard tenant',
+                'detail': str(error)
+            }, status=status.HTTP_403_FORBIDDEN)

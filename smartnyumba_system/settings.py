@@ -13,7 +13,7 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = True
 
 # ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost', cast=Csv())
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ["178.105.35.41", "api.smartnyumba.com", "smartnyumba.com", "api.smartnyumba.tech", "smartnyumba.tech", "localhost"]
 
 
 # Application definition
@@ -83,7 +83,7 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
-CSRF_TRUSTED_ORIGINS = ['https://smartnyumbabackup-production.up.railway.app','https://api.smartnyumba.com']
+CSRF_TRUSTED_ORIGINS = ['https://smartnyumbabackup-production.up.railway.app','https://api.smartnyumba.com','https://api.smartnyumba.tech','https://smartnyumba.com','https://smartnyumba.tech']
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -142,20 +142,20 @@ ENVIRONMENT = config('ENVIRONMENT')
 
 
 
-if ENVIRONMENT:
+if ENVIRONMENT == 'LOCAL':
     DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.mysql",
+        "ENGINE": "django.db.backends.postgresql",
         "NAME": config("DATABASE_NAME"),
         "USER": config("DATABASE_USER"),
         "PASSWORD": config("DATABASE_PASSWORD"),
         "HOST": config("DATABASE_HOST"),
-        "PORT": "3306",
+        "PORT": config("DB_PORT"),
     }
 } 
 
 else:
-    DATABASE_URL = "postgresql://postgres:*dd-FaG6BFBACc6fD3BG1C1Ee55gbc4A@roundhouse.proxy.rlwy.net:47968/railway"
+    DATABASE_URL = config("MY_DATABASE_URL")
 
     DATABASES = {
     'default': dj_database_url.config(default=DATABASE_URL, conn_max_age = 1800),
@@ -221,7 +221,9 @@ EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS",default=False, cast=bool)
 EMAIL_USE_SSL = config("EMAIL_USE_SSL",default=True, cast=bool)
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
-TILL_NUMBER = config("TILL_NUMBER")
+TILLNUMBER = config("TILLNUMBER")
+MY_DATABASE_URL = config("MY_DATABASE_URL")
+DB_PORT = config("DB_PORT")
 
 SAFARICOM_AUTH_ENDPOINT=config('SAFARICOM_AUTH_ENDPOINT')
 SAFARICOM_AUTH_KEY=config('SAFARICOM_AUTH_KEY')
@@ -243,3 +245,19 @@ SAFARICOM_B2C_INITIATOR_NAME = config('SAFARICOM_B2C_INITIATOR_NAME')
 SAFARICOM_B2C_QUEUETIMEOUTURL = config('SAFARICOM_B2C_QUEUETIMEOUTURL')
 SAFARICOM_B2C_RESULTURL = config('SAFARICOM_B2C_RESULTURL')
 SAFARICOM_B2C_PARTYA = config('SAFARICOM_B2C_PARTYA')
+B2C_CER = config('B2C_CER')
+
+# Platform commission settings
+PLATFORM_COMMISSION_RATE = config('PLATFORM_COMMISSION_RATE', default='0.05', cast=float)
+
+# Pesapal Configuration
+# IMPORTANT: Base URLs should NOT include '/api' suffix
+# The '/api' prefix is included in the endpoint constants (e.g., '/api/Auth/RequestToken')
+# Sandbox: https://cybqa.pesapal.com/pesapalv3 -> https://cybqa.pesapal.com/pesapalv3/api/Auth/RequestToken
+# Production: https://pay.pesapal.com/v3 -> https://pay.pesapal.com/v3/api/Auth/RequestToken
+PESAPAL_CONSUMER_KEY = config('PESAPAL_CONSUMER_KEY', default='FHzwQRiIVVhTs4ZU9QM2V6Bem44KuBRa')
+PESAPAL_CONSUMER_SECRET = config('PESAPAL_CONSUMER_SECRET', default='JwpABThwdS13EsCK0gnMwGLpmog=')
+PESAPAL_BASE_URL = config('PESAPAL_BASE_URL', default='https://pay.pesapal.com/v3')  # Sandbox URL
+
+# Site Configuration
+SITE_URL = config('SITE_URL', default='https://api.smartnyumba.tech')

@@ -12,11 +12,18 @@ urlpatterns = [
 
     path('block-landlord-login/', views.LoginBlockLandlordAPIView.as_view(), name='login-api'),
     path('block-landlord-logout/', views.LogoutBlockLandlordAPIView.as_view(), name='user-logout-api'),
+    path('block-landlord-profile/', views.BlockLandlordProfileAPIView.as_view(), name='landlord-profile-api'),
     path('block-landlord-forgot-password/', views.ForgotPasswordBlockLandlordAPIView.as_view(), name='forgot-password-api'),
     path('block-landlord-verify-change-password/', views.VerifyChangePasswordBlockLandlordAPIView.as_view(), name='verify-change-password-api'),
     path('block-landlord-resend-otp/', views.ResendOtpPasswordBlockLandlordAPIView.as_view(), name='resend-otp'),
     path('block-landlord-new-password/', views.NewPasswordPasswordBlockLandlordAPIView.as_view(), name='new-password-api'),
 
     #---------------------All Tenants -------------------------------------------
-    path('view-all-tenats/', views.AllTenantsAPIView.as_view(), name='view-all-tenants')
+    path('view-all-tenats/', views.AllTenantsAPIView.as_view(), name='view-all-tenants'),
+
+    #---------------------Financial Dashboard -----------------------------------
+    path('financial-summary/', views.LandlordFinancialSummaryAPIView.as_view(), name='landlord-financial-summary'),
+
+    #---------------------Landlord Transactions ---------------------------------
+    path('landlord-transactions/', views.LandlordTransactionsAPIView.as_view(), name='landlord-transactions'),
 ]

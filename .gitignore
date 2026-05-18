@@ -2,7 +2,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=linux,windows,django,python,visualstudiocode,sublimetext,pycharm+all,intellij+all
 
 
-*.cer
+
 
 
 ### Django ###
@@ -446,6 +446,7 @@ bh_unicode_properties.cache
 # Sublime-github package stores a github token in this file
 # https://packagecontrol.io/packages/sublime-github
 GitHub.sublime-settings
+*.dockerignore
 
 ### VisualStudioCode ###
 .vscode/*
@@ -481,7 +482,9 @@ ehthumbs_vista.db
 
 # Dump file
 *.stackdump
-
+Dockerfile/
+*.yaml
+*.gitignore
 # Folder config file
 [Dd]esktop.ini
 
